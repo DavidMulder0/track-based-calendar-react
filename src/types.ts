@@ -98,7 +98,10 @@ export interface VerticalTimelineProps {
    */
   snapToMinutesOverride?: number;
 
-  /** Fallback timezone when no preceding event exists. Default: system local */
+  /** Primary timezone for rendering the date/time axis and newly created events. */
+  timezone?: string;
+
+  /** Fallback timezone when timezone prop is omitted. Default: system local */
   defaultTimezone?: string;
 
   /** Schema definitions for custom event properties */

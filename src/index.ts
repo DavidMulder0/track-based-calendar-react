@@ -1,4 +1,5 @@
 export { VerticalTimeline, EventDialog } from './VerticalTimeline';
+export { getSupportedTimezones, getSystemTimezone } from './utils/temporal';
 export type {
   Resolution,
   TimezoneBound,

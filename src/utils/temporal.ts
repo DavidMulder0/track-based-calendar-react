@@ -1,12 +1,142 @@
-import { TimelineEvent, Resolution } from "../types";
+import { TimelineEvent, TimezoneBound, Resolution } from "../types";
 
 export const MS_PER_DAY = 86_400_000;
 
-export function toEpochMs(dateTime: Date | string): number {
+export function getTimezoneOffsetMs(date: Date, timezone: string): number {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    const partMap: Record<string, string> = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') {
+        partMap[p.type] = p.value;
+      }
+    }
+    const y = Number(partMap.year);
+    const m = Number(partMap.month) - 1;
+    const d = Number(partMap.day);
+    let hh = Number(partMap.hour);
+    if (hh === 24) hh = 0;
+    const mm = Number(partMap.minute);
+    const ss = Number(partMap.second);
+
+    const asUtc = Date.UTC(y, m, d, hh, mm, ss);
+    return asUtc - date.getTime();
+  } catch {
+    return 0;
+  }
+}
+
+export function parseLocalISOInTimezone(isoStr: string, timezone: string): number {
+  try {
+    const match = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!match) return new Date(isoStr).getTime();
+
+    const [, y, m, d, hh = '00', mm = '00', ss = '00'] = match;
+    const year = Number(y);
+    const month = Number(m) - 1;
+    const day = Number(d);
+    const hours = Number(hh);
+    const mins = Number(mm);
+    const secs = Number(ss);
+
+    const utcGuess = Date.UTC(year, month, day, hours, mins, secs);
+    const offsetMs = getTimezoneOffsetMs(new Date(utcGuess), timezone);
+    return utcGuess - offsetMs;
+  } catch {
+    return new Date(isoStr).getTime();
+  }
+}
+
+export function formatISOInTimezone(
+  epochMs: number,
+  timezone: string
+): string {
+  try {
+    const d = new Date(epochMs);
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      fractionalSecondDigits: 3,
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(d);
+    const partMap: Record<string, string> = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') partMap[p.type] = p.value;
+    }
+    let hh = Number(partMap.hour);
+    if (hh === 24) hh = 0;
+    const hhStr = String(hh).padStart(2, '0');
+    const msStr = partMap.fractionalSecond ? `.${partMap.fractionalSecond}` : '';
+    return `${partMap.year}-${partMap.month}-${partMap.day}T${hhStr}:${partMap.minute}:${partMap.second}${msStr}`;
+  } catch {
+    return new Date(epochMs).toISOString();
+  }
+}
+
+export function getMidnightEpochInTimezone(
+  dateTime: Date | string | undefined | null,
+  timezone: string
+): number {
+  if (!dateTime) return Date.now();
+  try {
+    const d = dateTime instanceof Date ? dateTime : new Date(dateTime);
+    if (isNaN(d.getTime())) return Date.now();
+
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const parts = formatter.formatToParts(d);
+    const partMap: Record<string, string> = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') partMap[p.type] = p.value;
+    }
+    const isoDateStr = `${partMap.year}-${partMap.month}-${partMap.day}T00:00:00`;
+    return parseLocalISOInTimezone(isoDateStr, timezone);
+  } catch {
+    return new Date(dateTime as string).getTime();
+  }
+}
+
+export function toEpochMs(
+  dateTime: Date | string | TimezoneBound | undefined | null,
+  timezoneFallback?: string
+): number {
+  if (!dateTime) return NaN;
   if (dateTime instanceof Date) {
     return dateTime.getTime();
   }
-  return new Date(dateTime).getTime();
+  if (typeof dateTime === 'object' && 'dateTime' in dateTime) {
+    const tz = dateTime.timezone || timezoneFallback;
+    return toEpochMs(dateTime.dateTime, tz);
+  }
+  if (typeof dateTime === 'string') {
+    if (timezoneFallback) {
+      const cleanIso = dateTime.replace(/Z$|[+-]\d{2}:\d{2}$/, '');
+      const epoch = parseLocalISOInTimezone(cleanIso, timezoneFallback);
+      if (!isNaN(epoch)) return epoch;
+    }
+    return new Date(dateTime).getTime();
+  }
+  return new Date(dateTime as string).getTime();
 }
 
 export function getSystemTimezone(): string {

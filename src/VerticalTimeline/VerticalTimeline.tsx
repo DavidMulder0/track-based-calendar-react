@@ -14,6 +14,9 @@ import {
   formatTimeOnlyLabel,
   formatSlotLabel,
   isWeekendDay,
+  getSystemTimezone,
+  getMidnightEpochInTimezone,
+  formatISOInTimezone,
   MS_PER_DAY,
 } from '../utils/temporal';
 import { computeTrackOverlapLayout } from '../utils/overlap';
@@ -68,6 +71,7 @@ export function VerticalTimeline({
   resolution = 1,
   dayHeight = 240,
   snapToMinutesOverride,
+  timezone,
   defaultTimezone,
   customPropertyFields = [],
   enableEventDialog = true,
@@ -89,6 +93,11 @@ export function VerticalTimeline({
   const wasDraggingRef = useRef<boolean>(false);
   const createdEventIdRef = useRef<string | null>(null);
 
+  const activeTimezone = useMemo(
+    () => timezone || defaultTimezone || getSystemTimezone(),
+    [timezone, defaultTimezone]
+  );
+
   const [dragState, setDragState] = useState<DragState | null>(null);
 
   interface CreateDragState {
@@ -109,8 +118,14 @@ export function VerticalTimeline({
   const [pendingOverlap, setPendingOverlap] = useState<PendingOverlapMove | null>(null);
 
   // Epoch metrics
-  const originMs = useMemo(() => toEpochMs(startDate), [startDate]);
-  const endScopeMs = useMemo(() => toEpochMs(endDate), [endDate]);
+  const originMs = useMemo(
+    () => getMidnightEpochInTimezone(startDate, activeTimezone),
+    [startDate, activeTimezone]
+  );
+  const endScopeMs = useMemo(
+    () => getMidnightEpochInTimezone(endDate, activeTimezone),
+    [endDate, activeTimezone]
+  );
   const totalDurationMs = useMemo(
     () => Math.max(endScopeMs - originMs, MS_PER_DAY),
     [endScopeMs, originMs]
@@ -222,15 +237,15 @@ export function VerticalTimeline({
 
     wasDraggingRef.current = false;
 
-    const startMs = toEpochMs(event.start.dateTime);
-    const endMs = toEpochMs(event.end.dateTime);
+    const startMs = toEpochMs(event.start, activeTimezone);
+    const endMs = toEpochMs(event.end, activeTimezone);
 
-    // Collect enclosed child events if this event is on a parent track
-    const enclosed = getEnclosedChildEvents(event, events, tracks);
-    const initialChildStates: ChildInitialState[] = enclosed.map((child) => ({
+    // Capture child event initial positions if this event is a parent track event
+    const childEvents = getEnclosedChildEvents(event, events, tracks);
+    const initialChildStates: ChildInitialState[] = childEvents.map((child) => ({
       event: child,
-      initialStartMs: toEpochMs(child.start.dateTime),
-      initialEndMs: toEpochMs(child.end.dateTime),
+      initialStartMs: toEpochMs(child.start, activeTimezone),
+      initialEndMs: toEpochMs(child.end, activeTimezone),
     }));
 
     setDragState({
@@ -292,6 +307,9 @@ export function VerticalTimeline({
 
   const onEventCreateRef = useRef(onEventCreate);
   onEventCreateRef.current = onEventCreate;
+
+  const activeTimezoneRef = useRef(activeTimezone);
+  activeTimezoneRef.current = activeTimezone;
 
   const emitPayloads = useCallback(
     (payloads: DragEventPayload[]) => {
@@ -382,11 +400,6 @@ export function VerticalTimeline({
 
         const startDateObj = new Date(startMs);
         const endDateObj = new Date(endMs);
-        const inheritedTz = getPrecedingTimezone(
-          eventsRef.current,
-          startDateObj,
-          defaultTimezone
-        );
 
         const newEvent: TimelineEvent = {
           id:
@@ -397,12 +410,12 @@ export function VerticalTimeline({
           title: 'New Event',
           description: '',
           start: {
-            dateTime: startDateObj.toISOString(),
-            timezone: inheritedTz,
+            dateTime: formatISOInTimezone(startMs, activeTimezoneRef.current),
+            timezone: activeTimezoneRef.current,
           },
           end: {
-            dateTime: endDateObj.toISOString(),
-            timezone: inheritedTz,
+            dateTime: formatISOInTimezone(endMs, activeTimezoneRef.current),
+            timezone: activeTimezoneRef.current,
           },
         };
 
@@ -462,15 +475,17 @@ export function VerticalTimeline({
                 );
 
           for (const pos of childPositions) {
+            const childTzStart = pos.event.start.timezone || activeTimezoneRef.current;
+            const childTzEnd = pos.event.end.timezone || activeTimezoneRef.current;
             childPayloads.push({
               event: pos.event,
               nextStart: {
-                dateTime: new Date(pos.nextStartMs).toISOString(),
-                timezone: pos.event.start.timezone,
+                dateTime: formatISOInTimezone(pos.nextStartMs, childTzStart),
+                timezone: childTzStart,
               },
               nextEnd: {
-                dateTime: new Date(pos.nextEndMs).toISOString(),
-                timezone: pos.event.end.timezone,
+                dateTime: formatISOInTimezone(pos.nextEndMs, childTzEnd),
+                timezone: childTzEnd,
               },
               nextTrackId: pos.event.trackId,
             });
@@ -507,15 +522,17 @@ export function VerticalTimeline({
 
         // If no overlap conflict, emit payloads directly
         if (isMovedOrResized) {
+          const tzStart = targetEvent.start.timezone || activeTimezoneRef.current;
+          const tzEnd = targetEvent.end.timezone || activeTimezoneRef.current;
           const parentPayload: DragEventPayload = {
             event: targetEvent,
             nextStart: {
-              dateTime: new Date(nextStartMs).toISOString(),
-              timezone: targetEvent.start.timezone,
+              dateTime: formatISOInTimezone(nextStartMs, tzStart),
+              timezone: tzStart,
             },
             nextEnd: {
-              dateTime: new Date(nextEndMs).toISOString(),
-              timezone: targetEvent.end.timezone,
+              dateTime: formatISOInTimezone(nextEndMs, tzEnd),
+              timezone: tzEnd,
             },
             nextTrackId: ds.currentTrackId,
           };
@@ -553,15 +570,17 @@ export function VerticalTimeline({
     const { movedEvent, nextStartMs, nextEndMs, nextTrackId, childPayloads } =
       pendingOverlap;
 
+    const tzStart = movedEvent.start.timezone || activeTimezoneRef.current;
+    const tzEnd = movedEvent.end.timezone || activeTimezoneRef.current;
     const movedPayload: DragEventPayload = {
       event: movedEvent,
       nextStart: {
-        dateTime: new Date(nextStartMs).toISOString(),
-        timezone: movedEvent.start.timezone,
+        dateTime: formatISOInTimezone(nextStartMs, tzStart),
+        timezone: tzStart,
       },
       nextEnd: {
-        dateTime: new Date(nextEndMs).toISOString(),
-        timezone: movedEvent.end.timezone,
+        dateTime: formatISOInTimezone(nextEndMs, tzEnd),
+        timezone: tzEnd,
       },
       nextTrackId,
     };
@@ -578,15 +597,17 @@ export function VerticalTimeline({
         tracks
       );
       for (const change of pushedChanges) {
+        const pTzStart = change.event.start.timezone || activeTimezoneRef.current;
+        const pTzEnd = change.event.end.timezone || activeTimezoneRef.current;
         finalPayloads.push({
           event: change.event,
           nextStart: {
-            dateTime: new Date(change.nextStartMs).toISOString(),
-            timezone: change.event.start.timezone,
+            dateTime: formatISOInTimezone(change.nextStartMs, pTzStart),
+            timezone: pTzStart,
           },
           nextEnd: {
-            dateTime: new Date(change.nextEndMs).toISOString(),
-            timezone: change.event.end.timezone,
+            dateTime: formatISOInTimezone(change.nextEndMs, pTzEnd),
+            timezone: pTzEnd,
           },
           nextTrackId: change.event.trackId,
         });
@@ -600,15 +621,17 @@ export function VerticalTimeline({
         events
       );
       for (const change of shortenedChanges) {
+        const sTzStart = change.event.start.timezone || activeTimezoneRef.current;
+        const sTzEnd = change.event.end.timezone || activeTimezoneRef.current;
         finalPayloads.push({
           event: change.event,
           nextStart: {
-            dateTime: new Date(change.nextStartMs).toISOString(),
-            timezone: change.event.start.timezone,
+            dateTime: formatISOInTimezone(change.nextStartMs, sTzStart),
+            timezone: sTzStart,
           },
           nextEnd: {
-            dateTime: new Date(change.nextEndMs).toISOString(),
-            timezone: change.event.end.timezone,
+            dateTime: formatISOInTimezone(change.nextEndMs, sTzEnd),
+            timezone: sTzEnd,
           },
           nextTrackId: change.event.trackId,
         });
@@ -708,13 +731,8 @@ export function VerticalTimeline({
     const heightPx = Math.max((endMs - startMs) * P, 20);
 
     const startDateObj = new Date(startMs);
-    const inheritedTz = getPrecedingTimezone(
-      events,
-      startDateObj,
-      defaultTimezone
-    );
-    const startLabel = formatTimeOnlyLabel(startDateObj, inheritedTz);
-    const endLabel = formatTimeOnlyLabel(new Date(endMs), inheritedTz);
+    const startLabel = formatTimeOnlyLabel(startDateObj, activeTimezone);
+    const endLabel = formatTimeOnlyLabel(new Date(endMs), activeTimezone);
 
     return {
       trackId: createDragState.trackId,
@@ -723,7 +741,7 @@ export function VerticalTimeline({
       startLabel,
       endLabel,
     };
-  }, [createDragState, originMs, P, activeSnapMs, events, defaultTimezone]);
+  }, [createDragState, originMs, P, activeSnapMs, activeTimezone]);
 
   // Handle Track Double-click to create or slot double click
   const handleTrackDoubleClick = (
@@ -740,12 +758,7 @@ export function VerticalTimeline({
     const snappedTimeMs = originMs + slotIndex * slotDurationMs;
     const timestamp = new Date(snappedTimeMs);
 
-    const inheritedTz = getPrecedingTimezone(
-      events,
-      timestamp,
-      defaultTimezone
-    );
-    onSlotDoubleClick(trackId, timestamp, inheritedTz);
+    onSlotDoubleClick(trackId, timestamp, activeTimezone);
   };
 
   const handleEventClickInternal = (event: TimelineEvent) => {
@@ -831,16 +844,11 @@ export function VerticalTimeline({
           {/* Vertically Merged Date Sub-Column */}
           <div className="vt-day-column">
             {dayBlocks.map((day) => {
-              const inheritedTz = getPrecedingTimezone(
-                events,
-                day.time,
-                defaultTimezone
-              );
               const { weekday, dateStr } = formatDateLabelParts(
                 day.time,
-                inheritedTz
+                activeTimezone
               );
-              const isWeekend = isWeekendDay(day.time, inheritedTz);
+              const isWeekend = isWeekendDay(day.time, activeTimezone);
               return (
                 <div
                   key={day.dayIndex}
@@ -867,11 +875,6 @@ export function VerticalTimeline({
           {!isSingleSlotPerDay && (
             <div className="vt-time-column">
               {timeSlots.map((slot, index) => {
-                const inheritedTz = getPrecedingTimezone(
-                  events,
-                  slot.time,
-                  defaultTimezone
-                );
                 return (
                   <div
                     key={index}
@@ -882,8 +885,8 @@ export function VerticalTimeline({
                     }}
                   >
                     {renderTimeSlotLabel
-                      ? renderTimeSlotLabel(slot.time, inheritedTz)
-                      : formatTimeOnlyLabel(slot.time, inheritedTz)}
+                      ? renderTimeSlotLabel(slot.time, activeTimezone)
+                      : formatTimeOnlyLabel(slot.time, activeTimezone)}
                   </div>
                 );
               })}
@@ -895,12 +898,7 @@ export function VerticalTimeline({
         <div className="vt-tracks-container" style={{ height: totalHeightPx }}>
           {/* Weekend Day Row Highlights */}
           {dayBlocks.map((day) => {
-            const inheritedTz = getPrecedingTimezone(
-              events,
-              day.time,
-              defaultTimezone
-            );
-            if (!isWeekendDay(day.time, inheritedTz)) return null;
+            if (!isWeekendDay(day.time, activeTimezone)) return null;
             return (
               <div
                 key={day.dayIndex}
@@ -913,7 +911,6 @@ export function VerticalTimeline({
             );
           })}
 
-          {/* Yellow Dotted Now Line Indicator */}
           {/* Yellow Dotted Now Line Indicator */}
           {isNowInRange && (
             <div
@@ -984,8 +981,8 @@ export function VerticalTimeline({
                   const isDraggingThis = dragState?.eventId === event.id;
                   const preview = dragPreviews?.get(event.id);
 
-                  let startMs = toEpochMs(event.start.dateTime);
-                  let endMs = toEpochMs(event.end.dateTime);
+                  let startMs = toEpochMs(event.start, activeTimezone);
+                  let endMs = toEpochMs(event.end, activeTimezone);
 
                   if (preview) {
                     startMs = preview.startMs;

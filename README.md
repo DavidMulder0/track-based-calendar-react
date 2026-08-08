@@ -207,7 +207,8 @@ If $S_{\text{prev}} \neq \emptyset$, the algorithm selects $E_{\text{closest}}$ 
 | `resolution` | `Resolution` | `1` | Number of slots per day (`1, 2, 3, 4, 6, 8, 12, 24, 48, 96`). |
 | `dayHeight` | `number` | `240` | Visual height in pixels for a 24-hour day row. |
 | `snapToMinutesOverride`| `number` | `undefined` | Optional drag snap override in minutes (e.g. `15`, `30`, `60`). |
-| `defaultTimezone` | `string` | System Local | Fallback IANA timezone identifier when no preceding timezone exists. |
+| `timezone` | `string` | System Local | Primary IANA timezone identifier for rendering date/time columns and newly created events. |
+| `defaultTimezone` | `string` | System Local | Fallback IANA timezone identifier when `timezone` prop is omitted. |
 | `customPropertyFields` | `CustomPropertyField[]` | `[]` | Schema definitions for custom properties in the built-in event dialog. |
 | `enableEventDialog` | `boolean` | `true` | Enables opening the built-in event detail modal when clicking an event. |
 | `renderEvent` | `Function` | `undefined` | Custom render prop for event card content. |

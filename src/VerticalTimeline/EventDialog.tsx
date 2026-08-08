@@ -6,7 +6,7 @@ import {
   CustomPropertyField,
   CustomCurrencyValue,
 } from '../types';
-import { getSupportedTimezones, getSupportedCurrencies, currencyAsSymbol } from '../utils/temporal';
+import { getSupportedTimezones, getSupportedCurrencies, currencyAsSymbol, toEpochMs, formatISOInTimezone, getSystemTimezone } from '../utils/temporal';
 
 interface EventDialogProps {
   event: TimelineEvent | null;
@@ -21,30 +21,24 @@ interface EventDialogProps {
 }
 
 // Convert Date or ISO string to format required by <input type="datetime-local"> (YYYY-MM-DDTHH:mm:ss)
-function toDatetimeLocal(val: Date | string): string {
+function toDatetimeLocal(val: Date | string, timezone?: string): string {
   try {
-    const d = val instanceof Date ? val : new Date(val);
-    if (isNaN(d.getTime())) return '';
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const year = d.getFullYear();
-    const month = pad(d.getMonth() + 1);
-    const day = pad(d.getDate());
-    const hours = pad(d.getHours());
-    const mins = pad(d.getMinutes());
-    const secs = pad(d.getSeconds());
-    return `${year}-${month}-${day}T${hours}:${mins}:${secs}`;
+    if (typeof val === 'string') {
+      const match = val.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?)/);
+      if (match && !val.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(val)) {
+        return match[1];
+      }
+    }
+    const epochMs = toEpochMs(val, timezone);
+    if (isNaN(epochMs)) return '';
+    return formatISOInTimezone(epochMs, timezone || getSystemTimezone()).slice(0, 19);
   } catch {
     return '';
   }
 }
 
 function fromDatetimeLocal(val: string): string {
-  try {
-    const d = new Date(val);
-    return d.toISOString();
-  } catch {
-    return new Date().toISOString();
-  }
+  return val;
 }
 
 export function EventDialog({
@@ -90,10 +84,12 @@ export function EventDialog({
     if (event) {
       const activeTrackId = event.trackId || (tracks[0]?.id ?? '');
       setTrackId(activeTrackId);
-      setStartDateTime(toDatetimeLocal(event.start.dateTime));
-      setStartTimezone(event.start.timezone || 'UTC');
-      setEndDateTime(toDatetimeLocal(event.end.dateTime));
-      setEndTimezone(event.end.timezone || 'UTC');
+      const stz = event.start.timezone || 'UTC';
+      const etz = event.end.timezone || 'UTC';
+      setStartDateTime(toDatetimeLocal(event.start.dateTime, stz));
+      setStartTimezone(stz);
+      setEndDateTime(toDatetimeLocal(event.end.dateTime, etz));
+      setEndTimezone(etz);
 
       // Initialize custom data map
       const initialCustom: Record<string, unknown> = { ...(event.data || {}) };

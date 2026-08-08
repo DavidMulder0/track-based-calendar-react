@@ -7,6 +7,8 @@ import {
   DragEventPayload,
   CustomPropertyField,
   CustomCurrencyValue,
+  getSupportedTimezones,
+  getSystemTimezone,
 } from "../src";
 
 const SAMPLE_TRACKS: Track[] = [
@@ -95,10 +97,10 @@ const INITIAL_EVENTS: TimelineEvent[] = [
     id: "evt-hotel",
     trackId: "track-accommodation",
     start: {
-      dateTime: "2026-06-01T02:00:00.000Z",
+      dateTime: "2026-06-01T02:00:00",
       timezone: "America/New_York",
     },
-    end: { dateTime: "2026-06-02T18:00:00.000Z", timezone: "America/New_York" },
+    end: { dateTime: "2026-06-02T18:00:00", timezone: "America/New_York" },
     title: "Grand Plaza Hotel Stay (Parent)",
     description: "Main accommodation booking range spanning 2 days",
     isDraggable: true,
@@ -115,10 +117,10 @@ const INITIAL_EVENTS: TimelineEvent[] = [
     id: "evt-shuttle",
     trackId: "track-transport",
     start: {
-      dateTime: "2026-06-01T04:00:00.000Z",
+      dateTime: "2026-06-01T06:00:00",
       timezone: "America/New_York",
     },
-    end: { dateTime: "2026-06-01T08:00:00.000Z", timezone: "America/New_York" },
+    end: { dateTime: "2026-06-01T10:00:00", timezone: "America/New_York" },
     title: "Airport Express Shuttle (Child)",
     description: "Enclosed in Hotel Stay range",
     isDraggable: true,
@@ -137,10 +139,10 @@ const INITIAL_EVENTS: TimelineEvent[] = [
     id: "evt-tour",
     trackId: "track-activities",
     start: {
-      dateTime: "2026-06-01T10:00:00.000Z",
+      dateTime: "2026-06-01T11:00:00",
       timezone: "America/New_York",
     },
-    end: { dateTime: "2026-06-01T16:00:00.000Z", timezone: "America/New_York" },
+    end: { dateTime: "2026-06-01T16:00:00", timezone: "America/New_York" },
     title: "Guided Museum & City Tour (Child)",
     description: "Enclosed in Hotel Stay range",
     isDraggable: true,
@@ -157,10 +159,10 @@ const INITIAL_EVENTS: TimelineEvent[] = [
     id: "evt-return-flight",
     trackId: "track-transport",
     start: {
-      dateTime: "2026-06-02T10:00:00.000Z",
+      dateTime: "2026-06-02T10:00:00",
       timezone: "America/New_York",
     },
-    end: { dateTime: "2026-06-02T16:00:00.000Z", timezone: "America/New_York" },
+    end: { dateTime: "2026-06-02T16:00:00", timezone: "America/New_York" },
     title: "Return Flight Connection (Child)",
     description: "Enclosed near end of Hotel Stay",
     isDraggable: true,
@@ -192,6 +194,8 @@ export function App() {
   const [snapOverride, setSnapOverride] = useState<number | undefined>(
     undefined,
   );
+  const [selectedTimezone, setSelectedTimezone] = useState<string>("America/New_York");
+  const supportedTimezones = getSupportedTimezones();
 
   // Playground History State for Undo / Redo
   const [history, setHistory] = useState<TimelineEvent[][]>([INITIAL_EVENTS]);
@@ -552,6 +556,41 @@ export function App() {
           </select>
         </div>
 
+        <div>
+          <label
+            style={{
+              fontSize: "0.8rem",
+              color: "#94a3b8",
+              display: "block",
+              marginBottom: 4,
+            }}
+          >
+            Active Timezone
+          </label>
+          <select
+            value={selectedTimezone}
+            onChange={(e) => {
+              setSelectedTimezone(e.target.value);
+              addLog(`Switched timeline timezone to "${e.target.value}"`);
+            }}
+            style={{
+              background: "#0f172a",
+              color: "#f8fafc",
+              border: "1px solid #475569",
+              padding: "6px 12px",
+              borderRadius: 6,
+              outline: "none",
+              cursor: "pointer",
+            }}
+          >
+            {supportedTimezones.map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div style={{ marginLeft: "auto" }}>
           <span
             style={{ fontSize: "0.8rem", color: "#818cf8", fontWeight: 500 }}
@@ -572,6 +611,7 @@ export function App() {
           resolution={resolution}
           dayHeight={dayHeight}
           snapToMinutesOverride={snapOverride}
+          timezone={selectedTimezone}
           defaultTimezone="UTC"
           customPropertyFields={CUSTOM_FIELDS}
           enableEventDialog={true}
