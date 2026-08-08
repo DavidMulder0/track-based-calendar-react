@@ -1,4 +1,4 @@
-export { VerticalTimeline } from './VerticalTimeline';
+export { VerticalTimeline, EventDialog } from './VerticalTimeline';
 export type {
   Resolution,
   TimezoneBound,

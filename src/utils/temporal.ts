@@ -199,3 +199,17 @@ export function formatTimeOnlyLabel(date: Date, timezone: string): string {
 export function formatSlotLabel(slotTime: Date, timezone: string): string {
   return `${formatDateLabel(slotTime, timezone)} ${formatTimeOnlyLabel(slotTime, timezone)}`;
 }
+
+export function isWeekendDay(date: Date, timezone: string): boolean {
+  try {
+    const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+    });
+    const dayStr = weekdayFormatter.format(date);
+    return dayStr === "Sat" || dayStr === "Sun";
+  } catch {
+    const day = date.getDay();
+    return day === 0 || day === 6;
+  }
+}

@@ -1,4 +1,3 @@
-export const verticalTimelineStyles = `
 .vertical-timeline {
   display: flex;
   flex-direction: column;
@@ -138,9 +137,15 @@ export const verticalTimelineStyles = `
   background: rgba(15, 23, 42, 0.6);
 }
 
+.vt-day-block:has(.is-compact-row) {
+  padding-top: 0;
+  justify-content: center;
+}
+
 .vt-day-label {
   position: sticky;
-  top: 48px;
+  /* top: 48px; */
+  top: 5px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -170,6 +175,61 @@ export const verticalTimelineStyles = `
   color: #f8fafc;
   margin-top: 2px;
   line-height: 1.1;
+}
+
+/* Compact Row Date Column Styles (when slotHeightPx <= 30) */
+.vt-header-time-axis.is-compact-row {
+  width: 200px;
+  min-width: 200px;
+}
+
+.vt-header-time-axis.is-compact-row .vt-header-day-subcol {
+  width: 120px;
+  min-width: 120px;
+  flex: 0 0 120px;
+}
+
+.vt-time-axis-column.is-compact-row {
+  width: 200px;
+  min-width: 200px;
+}
+
+.vt-time-axis-column.is-compact-row .vt-day-column {
+  width: 120px;
+  min-width: 120px;
+}
+
+.vt-day-label.is-compact-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  position: unset;
+}
+
+.vt-day-label.is-compact-row .vt-day-date {
+  margin-top: 0;
+}
+
+/* Single Slot Per Day Styles (when resolution === 1) */
+.vt-header-time-axis.is-single-slot,
+.vt-time-axis-column.is-single-slot {
+  width: 80px;
+  min-width: 80px;
+}
+
+.vt-header-time-axis.is-single-slot.is-compact-row,
+.vt-time-axis-column.is-single-slot.is-compact-row {
+  width: 120px;
+  min-width: 120px;
+}
+
+.vt-header-time-axis.is-single-slot .vt-header-day-subcol,
+.vt-time-axis-column.is-single-slot .vt-day-column {
+  width: 100%;
+  min-width: 100%;
+  flex: 1;
+  border-right: none;
 }
 
 .vt-time-column {
@@ -351,317 +411,62 @@ export const verticalTimelineStyles = `
   opacity: 1;
 }
 
-/* Event Editing Dialog Modal */
-.vt-dialog-backdrop {
-  position: fixed;
-  top: 0;
+/* Drag to Create Ghost Event Preview */
+.vt-event.is-creating {
+  background: rgba(129, 140, 248, 0.35);
+  border: 2px dashed #818cf8;
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+  pointer-events: none;
+  z-index: 25;
+  animation: vtPulseCreate 1.5s infinite ease-in-out;
+}
+
+@keyframes vtPulseCreate {
+  0%, 100% { border-color: #818cf8; }
+  50% { border-color: #a5b4fc; }
+}
+
+/* Current Moment "Now" Yellow Dotted Line Indicator */
+.vt-now-indicator-line {
+  position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  background-color: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(8px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  animation: vtFadeIn 0.2s ease-out;
+  height: 0;
+  border-top: 2px dotted #facc15;
+  z-index: 18;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.6);
 }
 
-.vt-dialog {
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  color: #f8fafc;
-  animation: vtSlideUp 0.2s ease-out;
-}
-
-@keyframes vtFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes vtSlideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-.vt-dialog-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #334155;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #0f172a;
-}
-
-.vt-dialog-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #f8fafc;
-}
-
-.vt-dialog-close {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 1.5rem;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0 4px;
-}
-
-.vt-dialog-close:hover {
-  color: #f8fafc;
-}
-
-.vt-dialog-form {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow: hidden;
-}
-
-.vt-dialog-body {
-  padding: 20px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.vt-dialog-section {
-  border-top: 1px solid #334155;
-  padding-top: 16px;
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.vt-dialog-section-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
+.vt-now-indicator-badge {
+  position: absolute;
+  left: 4px;
+  top: -10px;
+  background: #facc15;
+  color: #0f172a;
+  font-size: 0.6rem;
+  font-weight: 800;
   letter-spacing: 0.05em;
-  color: #818cf8;
-  margin-bottom: 4px;
-}
-
-.vt-form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-}
-
-.vt-checkbox-group {
-  margin-top: 4px;
-}
-
-.vt-checkbox-label {
-  display: flex !important;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 0.85rem !important;
-  color: #f8fafc !important;
-}
-
-.vt-checkbox-label input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: #6366f1;
-  cursor: pointer;
-}
-
-.vt-form-group label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #cbd5e1;
-}
-
-.vt-form-group input[type="text"],
-.vt-form-group input[type="url"],
-.vt-form-group input[type="number"],
-.vt-form-group input[type="datetime-local"],
-.vt-form-group select,
-.vt-form-group textarea {
-  background: #0f172a;
-  border: 1px solid #475569;
-  border-radius: 6px;
-  padding: 8px 12px;
-  color: #f8fafc;
-  font-size: 0.875rem;
-  outline: none;
-  transition: border-color 0.15s ease;
-  font-family: inherit;
-}
-
-.vt-form-group input:focus,
-.vt-form-group select:focus,
-.vt-form-group textarea:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-}
-
-.vt-form-row {
-  display: flex;
-  gap: 12px;
-}
-
-.vt-currency-input-row {
-  display: flex;
-  gap: 8px;
-}
-
-.vt-currency-symbol-input {
-  width: 90px !important;
-  text-align: center;
-  font-weight: 600;
-  color: #818cf8 !important;
-}
-
-.vt-currency-amount-input {
-  flex: 1;
-}
-
-.vt-dialog-footer {
-  padding: 16px 20px;
-  border-top: 1px solid #334155;
-  display: flex;
-  align-items: center;
-  background: #0f172a;
-}
-
-.vt-btn {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
-}
-
-.vt-btn-primary {
-  background: #6366f1;
-  color: #ffffff;
-}
-
-.vt-btn-primary:hover {
-  background: #4f46e5;
-}
-
-.vt-btn-secondary {
-  background: #334155;
-  color: #cbd5e1;
-}
-
-.vt-btn-secondary:hover {
-  background: #475569;
-  color: #f8fafc;
-}
-
-.vt-btn-danger {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-}
-
-.vt-btn-danger:hover {
-  background: rgba(239, 68, 68, 0.3);
-  color: #f87171;
-}
-
-/* Overlap Conflict Dialog Styles */
-.vt-conflict-dialog {
-  max-width: 540px !important;
-}
-
-.vt-conflict-event-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.vt-conflict-event-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(99, 102, 241, 0.2);
-  border: 1px solid rgba(129, 140, 248, 0.4);
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.775rem;
-  color: #e0e7ff;
-}
-
-.vt-conflict-event-title {
-  font-weight: 600;
-}
-
-.vt-conflict-event-tz {
-  font-size: 0.65rem;
-  opacity: 0.8;
-  background: rgba(255, 255, 255, 0.15);
-  padding: 1px 4px;
+  padding: 1px 5px;
   border-radius: 3px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
-.vt-conflict-options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
+/* Weekend Day Highlights */
+.vt-weekend-row-highlight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.035);
+  pointer-events: none;
+  z-index: 1;
 }
 
-.vt-conflict-option-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 12px 14px;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-  color: #f8fafc;
+.vt-day-block.is-weekend {
+  background: rgba(30, 41, 59, 0.85);
 }
 
-.vt-conflict-option-card:hover {
-  background: #1e293b;
-  border-color: #6366f1;
-  transform: translateY(-1px);
+.vt-day-label.is-weekend {
+  border-color: rgba(129, 140, 248, 0.5);
+  background: rgba(45, 40, 65, 0.9);
 }
-
-.vt-option-icon {
-  font-size: 1.2rem;
-  line-height: 1;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.vt-option-title {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: #f8fafc;
-  margin-bottom: 2px;
-}
-
-.vt-option-desc {
-  font-size: 0.775rem;
-  color: #94a3b8;
-  line-height: 1.35;
-}
-`;

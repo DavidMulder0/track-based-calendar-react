@@ -1,0 +1,236 @@
+/* Event Editing Dialog Modal */
+dialog.vt-dialog {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  width: calc(100% - 32px);
+  max-width: 560px;
+  max-height: 90vh;
+  padding: 0;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  color: #f8fafc;
+  animation: vtSlideUp 0.2s ease-out;
+}
+
+dialog.vt-dialog:not([open]) {
+  display: none;
+}
+
+dialog.vt-dialog::backdrop {
+  background-color: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  animation: vtFadeIn 0.2s ease-out;
+}
+
+@keyframes vtFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vtSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.vt-dialog-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0f172a;
+}
+
+.vt-dialog-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.vt-dialog-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.vt-dialog-close:hover {
+  color: #f8fafc;
+}
+
+.vt-dialog-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.vt-dialog-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vt-dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.vt-dialog-section-first {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.vt-dialog-section-divider {
+  border-top: 1px solid #334155;
+  padding-top: 16px;
+  margin-top: 8px;
+}
+
+.vt-dialog-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #818cf8;
+  margin-bottom: 4px;
+}
+
+.vt-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.vt-checkbox-group {
+  margin-top: 4px;
+}
+
+.vt-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.85rem !important;
+  color: #f8fafc !important;
+}
+
+.vt-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.vt-form-group label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.vt-form-group input[type="text"],
+.vt-form-group input[type="url"],
+.vt-form-group input[type="number"],
+.vt-form-group input[type="datetime-local"],
+.vt-form-group select,
+.vt-form-group textarea {
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #f8fafc;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+  font-family: inherit;
+  width: 100%;
+}
+
+.vt-form-group input:focus,
+.vt-form-group select:focus,
+.vt-form-group textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.vt-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.vt-currency-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.vt-currency-symbol-input {
+  width: 90px !important;
+  text-align: center;
+  font-weight: 600;
+  color: #818cf8 !important;
+}
+
+.vt-currency-amount-input {
+  flex: 1;
+}
+
+.vt-dialog-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  background: #0f172a;
+}
+
+.vt-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.vt-btn-primary {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.vt-btn-primary:hover {
+  background: #4f46e5;
+}
+
+.vt-btn-secondary {
+  background: #334155;
+  color: #cbd5e1;
+}
+
+.vt-btn-secondary:hover {
+  background: #475569;
+  color: #f8fafc;
+}
+
+.vt-btn-danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.vt-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}

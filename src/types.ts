@@ -30,6 +30,9 @@ export interface Track {
   label: ReactNode;
   subtitle?: ReactNode;
   
+  /** Track type: 'accommodation', 'transport', or 'custom' */
+  type?: 'accommodation' | 'transport' | 'custom' | string;
+
   /** ID of parent track if this track is a child track */
   parentId?: string;
   
@@ -118,6 +121,8 @@ export interface VerticalTimelineProps {
   onEventSave?: (updatedEvent: TimelineEvent) => void;
   onEventDelete?: (eventId: string) => void;
   onEventClick?: (event: TimelineEvent) => void;
+  /** Called when a new event is created via drag-to-create on empty track space. */
+  onEventCreate?: (newEvent: TimelineEvent) => void;
   onSlotDoubleClick?: (
     trackId: string,
     timestamp: Date,

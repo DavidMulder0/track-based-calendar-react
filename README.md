@@ -3,6 +3,11 @@
 A modern, high-performance, and feature-rich React vertical timeline component built for multi-track scheduling, trip planning, resource allocation, and project management applications.
 
 Features include:
+- **Weekend Day Row Highlighting**: Automatically identifies Saturday and Sunday rows (aware of active event timezones) and renders a subtle, lighter background row highlight across the entire grid and date column.
+- **Real-Time "Now" Indicator Line**: Displays a glowing yellow dotted horizontal line (`NOW` badge) across the tracks if and only if the current moment falls within the visible timeline range.
+- **Interactive Drag-to-Create**: Press and drag on empty track space to define an event's start time, duration, and track with a real-time visual ghost preview (`+ New Event`).
+- **Native HTML `<dialog>` Modals**: Built using native HTML `<dialog>` elements and Top Layer API, preventing modals from clipping or being hidden outside scrolling viewports.
+- **Responsive Compact & Single-Slot Layouts**: Automatic layout adjustments when row height is $\le 30\text{px}$ (inline weekday/date labels) or when `resolution={1}` (hides time sub-column).
 - **Dual-Column Time Axis Layout**: Vertically merged day blocks combined with configurable resolution time slots.
 - **Precision Temporal Scaling**: Independent scaling of day height ($H_{day}$) and grid resolution ($R$).
 - **Preceding Event Timezone Inheritance**: Automatic timezone propagation across timeline boundaries using `Intl.supportedValuesOf('timeZone')`.
@@ -10,6 +15,7 @@ Features include:
 - **Parent-Child Track Interactivity**: Synchronized real-time move and clamped bounds resizing of enclosed child events.
 - **Interactive Overlap Conflict Resolution**: Built-in modal presenting 3 strategies (*Do Nothing*, *Push Away with multi-track cascading*, *Shorten Overlapped Event(s)*).
 - **Track-Scoped Custom Property Schemas**: Full event editor dialog supporting `string`, `number`, `enum`, `currency` (with per-event currency symbols), `boolean`, and `link` field types scoped per track (`trackIds`).
+- **Modular CSS & Subpath Exports**: Support for standalone `EventDialog` imports (`track-based-calendar-react/EventDialog`) and automated CSS code-splitting.
 - **Fully Controlled Architecture**: Zero internal state mutation, enabling seamless Undo / Redo history management in host applications.
 
 ---
@@ -27,6 +33,7 @@ Features include:
   - [3. Overlap Conflict Resolution Strategies](#3-overlap-conflict-resolution-strategies)
   - [4. Host-Level Undo / Redo Implementation](#4-host-level-undo--redo-implementation)
   - [5. Custom Event Rendering](#5-custom-event-rendering)
+  - [6. Standalone EventDialog Usage](#6-standalone-eventdialog-usage)
 
 ---
 
@@ -49,7 +56,7 @@ import {
   Track,
   CustomPropertyField,
   DragEventPayload,
-} from 'planner';
+} from 'track-based-calendar-react';
 
 const SAMPLE_TRACKS: Track[] = [
   {
@@ -140,6 +147,9 @@ export function TimelineApp() {
         defaultTimezone="America/New_York"
         customPropertyFields={CUSTOM_FIELDS}
         onEventsUpdate={handleEventsUpdate}
+        onEventCreate={(newEvent) => {
+          setEvents((prev) => [...prev, newEvent]);
+        }}
         onEventSave={(savedEvent) => {
           setEvents((prev) =>
             prev.map((e) => (e.id === savedEvent.id ? savedEvent : e))
@@ -171,7 +181,9 @@ $$\text{Top}_{\text{px}} = (t_{\text{start}} - t_{\text{origin}}) \times P$$
 
 $$\text{Height}_{\text{px}} = \max\left((t_{\text{end}} - t_{\text{start}}) \times P, 20\text{px}\right)$$
 
-*If $\text{Height}_{\text{px}} < 22\text{px}$, vertical padding is automatically zeroed to keep text centered without clipping.*
+- **Compact Event Padding**: If $\text{Height}_{\text{px}} < 30\text{px}$, vertical padding is automatically zeroed (`isCompactHeight`) to keep text centered without clipping.
+- **Compact Row Date Layout**: If $H_{\text{slot}} \le 30\text{px}$, the date column expands from `80px` to `120px` and displays weekday and date side-by-side without a line break.
+- **Single-Slot Per Day**: If $R = 1$, the time column is hidden and the date column expands to occupy the entire time axis width.
 
 ### 2. Preceding Event Timezone Inheritance
 When displaying date labels or slot times, if a timezone is not set, the timeline queries preceding events:
@@ -203,6 +215,7 @@ If $S_{\text{prev}} \neq \emptyset$, the algorithm selects $E_{\text{closest}}$ 
 | `renderTimeSlotLabel` | `Function` | `undefined` | Custom render prop for time slot labels. |
 | `onEventsUpdate` | `(payloads: DragEventPayload[]) => void` | `undefined` | Callback fired when drag/resize/push/shorten updates 1 or more events. |
 | `onEventUpdate` | `(payload: DragEventPayload) => void` | `undefined` | Single-event update callback fallback. |
+| `onEventCreate` | `(newEvent: TimelineEvent) => void` | `undefined` | Callback fired when a new event is created via drag-to-create on empty track space. |
 | `onEventSave` | `(updatedEvent: TimelineEvent) => void` | `undefined` | Callback fired when an event is saved via the built-in dialog. |
 | `onEventDelete` | `(eventId: string) => void` | `undefined` | Callback fired when an event is deleted via the built-in dialog. |
 | `onEventClick` | `(event: TimelineEvent) => void` | `undefined` | Callback fired when an event is clicked. |
@@ -398,6 +411,40 @@ Pass `renderEvent` to completely customize the visual appearance of events:
   )}
   {...otherProps}
 />
+```
+
+---
+
+### 6. Standalone EventDialog Usage
+The `EventDialog` component can be imported and rendered standalone independently of the full timeline:
+
+```tsx
+import React, { useState } from 'react';
+import { EventDialog } from 'track-based-calendar-react/EventDialog';
+import { TimelineEvent, Track } from 'track-based-calendar-react';
+
+export function StandaloneDialogExample({ activeEvent, tracks }: { activeEvent: TimelineEvent; tracks: Track[] }) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <EventDialog
+      isOpen={isOpen}
+      event={activeEvent}
+      tracks={tracks}
+      minDate={new Date('2026-06-01T00:00:00.000Z')}
+      maxDate={new Date('2026-06-03T00:00:00.000Z')}
+      onClose={() => setIsOpen(false)}
+      onSave={(updatedEvent) => {
+        console.log('Saved event:', updatedEvent);
+        setIsOpen(false);
+      }}
+      onDelete={(eventId) => {
+        console.log('Deleted event:', eventId);
+        setIsOpen(false);
+      }}
+    />
+  );
+}
 ```
 
 ---

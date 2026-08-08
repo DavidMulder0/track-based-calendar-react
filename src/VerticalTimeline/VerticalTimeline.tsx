@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import {
   VerticalTimelineProps,
   TimelineEvent,
@@ -13,6 +13,7 @@ import {
   formatDateLabelParts,
   formatTimeOnlyLabel,
   formatSlotLabel,
+  isWeekendDay,
   MS_PER_DAY,
 } from '../utils/temporal';
 import { computeTrackOverlapLayout } from '../utils/overlap';
@@ -26,7 +27,7 @@ import {
   resolvePushEvents,
   resolveShortenEvents,
 } from '../utils/overlapResolution';
-import { verticalTimelineStyles } from './styles';
+import './VerticalTimeline.css';
 import { EventDialog } from './EventDialog';
 import { OverlapConflictDialog, OverlapStrategy } from './OverlapConflictDialog';
 
@@ -78,14 +79,26 @@ export function VerticalTimeline({
   onEventSave,
   onEventDelete,
   onEventClick,
+  onEventCreate,
   onSlotDoubleClick,
   className = '',
 }: VerticalTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const wasDraggingRef = useRef<boolean>(false);
+  const createdEventIdRef = useRef<string | null>(null);
 
   const [dragState, setDragState] = useState<DragState | null>(null);
+
+  interface CreateDragState {
+    trackId: string;
+    anchorStartMs: number;
+    initialPointerY: number;
+    currentPointerY: number;
+    initialOffsetY: number;
+  }
+
+  const [createDragState, setCreateDragState] = useState<CreateDragState | null>(null);
 
   // Dialog State
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | null>(null);
@@ -106,7 +119,26 @@ export function VerticalTimeline({
     [totalDurationMs]
   );
 
+  // Live "Now" Time Indicator
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const isNowInRange = useMemo(() => {
+    return nowMs >= originMs && nowMs <= endScopeMs;
+  }, [nowMs, originMs, endScopeMs]);
+
   const P = useMemo(() => calculateScaleFactor(dayHeight), [dayHeight]);
+
+  const nowTopPx = useMemo(() => {
+    if (!isNowInRange) return 0;
+    return (nowMs - originMs) * P;
+  }, [isNowInRange, nowMs, originMs, P]);
   const totalHeightPx = useMemo(
     () => totalDays * dayHeight,
     [totalDays, dayHeight]
@@ -120,6 +152,8 @@ export function VerticalTimeline({
     () => calculateSlotHeightPx(dayHeight, resolution),
     [dayHeight, resolution]
   );
+  const isCompactRow = slotHeightPx <= 30;
+  const isSingleSlotPerDay = resolution === 1;
 
   const activeSnapMs = useMemo(() => {
     if (snapToMinutesOverride && snapToMinutesOverride > 0) {
@@ -210,44 +244,53 @@ export function VerticalTimeline({
       initialChildStates,
     });
 
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    try {
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {
+      // ignore
+    }
   };
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragState) return;
+  const handleTrackPointerDown = (
+    e: React.PointerEvent<HTMLDivElement>,
+    trackId: string
+  ) => {
+    if (e.button !== 0) return;
 
-      const deltaY = e.clientY - dragState.initialPointerY;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const rawMs = originMs + offsetY / P;
 
-      // Determine current track hover if moving
-      let targetTrackId = dragState.currentTrackId;
-      if (dragState.action === 'move') {
-        const clientX = e.clientX;
-        for (const [tId, el] of trackRefs.current.entries()) {
-          const rect = el.getBoundingClientRect();
-          if (clientX >= rect.left && clientX <= rect.right) {
-            targetTrackId = tId;
-            break;
-          }
-        }
-      }
+    const anchorSlotIndex = Math.floor((rawMs - originMs) / activeSnapMs);
+    const anchorStartMs = originMs + anchorSlotIndex * activeSnapMs;
 
-      if (Math.abs(deltaY) > 3 || targetTrackId !== dragState.initialTrackId) {
-        wasDraggingRef.current = true;
-      }
+    setCreateDragState({
+      trackId,
+      anchorStartMs,
+      initialPointerY: e.clientY,
+      currentPointerY: e.clientY,
+      initialOffsetY: offsetY,
+    });
 
-      setDragState((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentDeltaY: deltaY,
-              currentTrackId: targetTrackId,
-            }
-          : null
-      );
-    },
-    [dragState]
-  );
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {
+      // ignore if pointer capture fails
+    }
+  };
+
+  // Refs for tracking active drag states and callbacks inside window listeners without stale closures
+  const dragStateRef = useRef<DragState | null>(null);
+  dragStateRef.current = dragState;
+
+  const createDragStateRef = useRef<CreateDragState | null>(null);
+  createDragStateRef.current = createDragState;
+
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
+
+  const onEventCreateRef = useRef(onEventCreate);
+  onEventCreateRef.current = onEventCreate;
 
   const emitPayloads = useCallback(
     (payloads: DragEventPayload[]) => {
@@ -263,50 +306,158 @@ export function VerticalTimeline({
     [onEventsUpdate, onEventUpdate]
   );
 
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragState) return;
+  const emitPayloadsRef = useRef(emitPayloads);
+  emitPayloadsRef.current = emitPayloads;
 
-      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+  // Window-level Pointer Event Listeners for robust drag move & completion on mouseup/pointerup anywhere
+  useEffect(() => {
+    if (!dragState && !createDragState) return;
 
-      const rawDeltaMs = dragState.currentDeltaY / P;
+    const handleWindowPointerMove = (e: PointerEvent) => {
+      if (createDragStateRef.current) {
+        setCreateDragState((prev) =>
+          prev ? { ...prev, currentPointerY: e.clientY } : null
+        );
+        wasDraggingRef.current = true;
+        return;
+      }
+
+      const ds = dragStateRef.current;
+      if (!ds) return;
+
+      const deltaY = e.clientY - ds.initialPointerY;
+
+      // Determine current track hover if moving
+      let targetTrackId = ds.currentTrackId;
+      if (ds.action === 'move') {
+        const clientX = e.clientX;
+        for (const [tId, el] of trackRefs.current.entries()) {
+          const rect = el.getBoundingClientRect();
+          if (clientX >= rect.left && clientX <= rect.right) {
+            targetTrackId = tId;
+            break;
+          }
+        }
+      }
+
+      if (Math.abs(deltaY) > 3 || targetTrackId !== ds.initialTrackId) {
+        wasDraggingRef.current = true;
+      }
+
+      setDragState((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentDeltaY: deltaY,
+              currentTrackId: targetTrackId,
+            }
+          : null
+      );
+    };
+
+    const handleWindowPointerUp = (e: PointerEvent) => {
+      // 1. Handle Drag-to-Create completion
+      if (createDragStateRef.current) {
+        const cds = createDragStateRef.current;
+        const deltaY = cds.currentPointerY - cds.initialPointerY;
+        const currentOffsetY = cds.initialOffsetY + deltaY;
+        const currentRawMs = originMs + currentOffsetY / P;
+
+        const currentSlotIndex = Math.floor(
+          (currentRawMs - originMs) / activeSnapMs
+        );
+        const currentMs = originMs + currentSlotIndex * activeSnapMs;
+
+        let startMs: number;
+        let endMs: number;
+
+        if (currentMs >= cds.anchorStartMs) {
+          startMs = cds.anchorStartMs;
+          endMs = currentMs + activeSnapMs;
+        } else {
+          startMs = currentMs;
+          endMs = cds.anchorStartMs + activeSnapMs;
+        }
+
+        const startDateObj = new Date(startMs);
+        const endDateObj = new Date(endMs);
+        const inheritedTz = getPrecedingTimezone(
+          eventsRef.current,
+          startDateObj,
+          defaultTimezone
+        );
+
+        const newEvent: TimelineEvent = {
+          id:
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `event-${Date.now()}`,
+          trackId: cds.trackId,
+          title: 'New Event',
+          description: '',
+          start: {
+            dateTime: startDateObj.toISOString(),
+            timezone: inheritedTz,
+          },
+          end: {
+            dateTime: endDateObj.toISOString(),
+            timezone: inheritedTz,
+          },
+        };
+
+        createdEventIdRef.current = newEvent.id;
+        onEventCreateRef.current?.(newEvent);
+        if (enableEventDialog) {
+          setEditingEvent(newEvent);
+          setIsDialogOpen(true);
+        }
+
+        setCreateDragState(null);
+        return;
+      }
+
+      // 2. Handle Event Move / Resize completion
+      const ds = dragStateRef.current;
+      if (!ds) return;
+
+      const rawDeltaMs = ds.currentDeltaY / P;
       const snappedDeltaMs =
         Math.round(rawDeltaMs / activeSnapMs) * activeSnapMs;
 
-      let nextStartMs = dragState.initialStartMs;
-      let nextEndMs = dragState.initialEndMs;
+      let nextStartMs = ds.initialStartMs;
+      let nextEndMs = ds.initialEndMs;
 
-      if (dragState.action === 'move') {
-        nextStartMs = dragState.initialStartMs + snappedDeltaMs;
-        nextEndMs = dragState.initialEndMs + snappedDeltaMs;
-      } else if (dragState.action === 'resize-top') {
+      if (ds.action === 'move') {
+        nextStartMs = ds.initialStartMs + snappedDeltaMs;
+        nextEndMs = ds.initialEndMs + snappedDeltaMs;
+      } else if (ds.action === 'resize-top') {
         nextStartMs = Math.min(
-          dragState.initialStartMs + snappedDeltaMs,
-          dragState.initialEndMs - activeSnapMs
+          ds.initialStartMs + snappedDeltaMs,
+          ds.initialEndMs - activeSnapMs
         );
-      } else if (dragState.action === 'resize-bottom') {
+      } else if (ds.action === 'resize-bottom') {
         nextEndMs = Math.max(
-          dragState.initialEndMs + snappedDeltaMs,
-          dragState.initialStartMs + activeSnapMs
+          ds.initialEndMs + snappedDeltaMs,
+          ds.initialStartMs + activeSnapMs
         );
       }
 
-      const targetEvent = events.find((ev) => ev.id === dragState.eventId);
+      const targetEvent = eventsRef.current.find((ev) => ev.id === ds.eventId);
 
       if (targetEvent) {
         // Collect child payloads if parent moved/resized
         const childPayloads: DragEventPayload[] = [];
-        if (dragState.initialChildStates.length > 0) {
+        if (ds.initialChildStates.length > 0) {
           const childPositions =
-            dragState.action === 'move'
+            ds.action === 'move'
               ? computeChildMovePositions(
                   snappedDeltaMs,
-                  dragState.initialChildStates
+                  ds.initialChildStates
                 )
               : computeChildResizePositions(
                   nextStartMs,
                   nextEndMs,
-                  dragState.initialChildStates
+                  ds.initialChildStates
                 );
 
           for (const pos of childPositions) {
@@ -327,7 +478,7 @@ export function VerticalTimeline({
 
         const isMovedOrResized =
           snappedDeltaMs !== 0 ||
-          dragState.currentTrackId !== dragState.initialTrackId;
+          ds.currentTrackId !== ds.initialTrackId;
 
         // If action is MOVE or RESIZE and created an overlap on target track -> prompt user
         if (isMovedOrResized) {
@@ -335,8 +486,8 @@ export function VerticalTimeline({
             targetEvent.id,
             nextStartMs,
             nextEndMs,
-            dragState.currentTrackId,
-            events
+            ds.currentTrackId,
+            eventsRef.current
           );
 
           if (overlaps.length > 0) {
@@ -344,7 +495,7 @@ export function VerticalTimeline({
               movedEvent: targetEvent,
               nextStartMs,
               nextEndMs,
-              nextTrackId: dragState.currentTrackId,
+              nextTrackId: ds.currentTrackId,
               overlappingEvents: overlaps,
               childPayloads,
             });
@@ -365,17 +516,34 @@ export function VerticalTimeline({
               dateTime: new Date(nextEndMs).toISOString(),
               timezone: targetEvent.end.timezone,
             },
-            nextTrackId: dragState.currentTrackId,
+            nextTrackId: ds.currentTrackId,
           };
 
-          emitPayloads([parentPayload, ...childPayloads]);
+          emitPayloadsRef.current([parentPayload, ...childPayloads]);
         }
       }
 
       setDragState(null);
-    },
-    [dragState, P, activeSnapMs, events, emitPayloads]
-  );
+    };
+
+    window.addEventListener('pointermove', handleWindowPointerMove);
+    window.addEventListener('pointerup', handleWindowPointerUp);
+    window.addEventListener('pointercancel', handleWindowPointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', handleWindowPointerUp);
+      window.removeEventListener('pointercancel', handleWindowPointerUp);
+    };
+  }, [
+    dragState,
+    createDragState,
+    P,
+    activeSnapMs,
+    defaultTimezone,
+    enableEventDialog,
+    originMs,
+  ]);
 
   // Handle choice in Overlap Conflict Dialog
   const handleSelectOverlapStrategy = (strategy: OverlapStrategy) => {
@@ -510,6 +678,52 @@ export function VerticalTimeline({
     return previewMap;
   }, [dragState, P, activeSnapMs]);
 
+  // Compute Creation Drag Ghost Event Preview
+  const createPreview = useMemo(() => {
+    if (!createDragState) return null;
+
+    const deltaY =
+      createDragState.currentPointerY - createDragState.initialPointerY;
+    const currentOffsetY = createDragState.initialOffsetY + deltaY;
+    const currentRawMs = originMs + currentOffsetY / P;
+
+    const currentSlotIndex = Math.floor(
+      (currentRawMs - originMs) / activeSnapMs
+    );
+    const currentMs = originMs + currentSlotIndex * activeSnapMs;
+
+    let startMs: number;
+    let endMs: number;
+
+    if (currentMs >= createDragState.anchorStartMs) {
+      startMs = createDragState.anchorStartMs;
+      endMs = currentMs + activeSnapMs;
+    } else {
+      startMs = currentMs;
+      endMs = createDragState.anchorStartMs + activeSnapMs;
+    }
+
+    const topPx = (startMs - originMs) * P;
+    const heightPx = Math.max((endMs - startMs) * P, 20);
+
+    const startDateObj = new Date(startMs);
+    const inheritedTz = getPrecedingTimezone(
+      events,
+      startDateObj,
+      defaultTimezone
+    );
+    const startLabel = formatTimeOnlyLabel(startDateObj, inheritedTz);
+    const endLabel = formatTimeOnlyLabel(new Date(endMs), inheritedTz);
+
+    return {
+      trackId: createDragState.trackId,
+      topPx,
+      heightPx,
+      startLabel,
+      endLabel,
+    };
+  }, [createDragState, originMs, P, activeSnapMs, events, defaultTimezone]);
+
   // Handle Track Double-click to create or slot double click
   const handleTrackDoubleClick = (
     e: React.MouseEvent<HTMLDivElement>,
@@ -548,6 +762,7 @@ export function VerticalTimeline({
   };
 
   const handleSaveEventInternal = (updatedEvent: TimelineEvent) => {
+    createdEventIdRef.current = null;
     onEventSave?.(updatedEvent);
   };
 
@@ -555,16 +770,16 @@ export function VerticalTimeline({
     <div
       ref={containerRef}
       className={`vertical-timeline ${className}`}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
     >
-      <style>{verticalTimelineStyles}</style>
-
       {/* Header */}
       <div className="vt-header">
-        <div className="vt-header-time-axis">
+        <div
+          className={`vt-header-time-axis ${isCompactRow ? 'is-compact-row' : ''} ${
+            isSingleSlotPerDay ? 'is-single-slot' : ''
+          }`}
+        >
           <div className="vt-header-day-subcol">Date</div>
-          <div className="vt-header-time-subcol">Time</div>
+          {!isSingleSlotPerDay && <div className="vt-header-time-subcol">Time</div>}
         </div>
         <div className="vt-header-tracks">
           {tracks.map((track) => (
@@ -606,7 +821,12 @@ export function VerticalTimeline({
       {/* Main Body */}
       <div className="vt-body-scroll">
         {/* Sticky Split Time Axis Column */}
-        <div className="vt-time-axis-column" style={{ height: totalHeightPx }}>
+        <div
+          className={`vt-time-axis-column ${isCompactRow ? 'is-compact-row' : ''} ${
+            isSingleSlotPerDay ? 'is-single-slot' : ''
+          }`}
+          style={{ height: totalHeightPx }}
+        >
           {/* Vertically Merged Date Sub-Column */}
           <div className="vt-day-column">
             {dayBlocks.map((day) => {
@@ -619,16 +839,21 @@ export function VerticalTimeline({
                 day.time,
                 inheritedTz
               );
+              const isWeekend = isWeekendDay(day.time, inheritedTz);
               return (
                 <div
                   key={day.dayIndex}
-                  className="vt-day-block"
+                  className={`vt-day-block ${isWeekend ? 'is-weekend' : ''}`}
                   style={{
                     top: day.topPx,
                     height: day.heightPx,
                   }}
                 >
-                  <div className="vt-day-label">
+                  <div
+                    className={`vt-day-label ${
+                      isCompactRow ? 'is-compact-row' : ''
+                    } ${isWeekend ? 'is-weekend' : ''}`}
+                  >
                     <div className="vt-day-weekday">{weekday}</div>
                     <div className="vt-day-date">{dateStr}</div>
                   </div>
@@ -638,33 +863,66 @@ export function VerticalTimeline({
           </div>
 
           {/* Resolution Time Slots Sub-Column */}
-          <div className="vt-time-column">
-            {timeSlots.map((slot, index) => {
-              const inheritedTz = getPrecedingTimezone(
-                events,
-                slot.time,
-                defaultTimezone
-              );
-              return (
-                <div
-                  key={index}
-                  className="vt-time-slot-label"
-                  style={{
-                    top: slot.topPx,
-                    height: slotHeightPx,
-                  }}
-                >
-                  {renderTimeSlotLabel
-                    ? renderTimeSlotLabel(slot.time, inheritedTz)
-                    : formatTimeOnlyLabel(slot.time, inheritedTz)}
-                </div>
-              );
-            })}
-          </div>
+          {!isSingleSlotPerDay && (
+            <div className="vt-time-column">
+              {timeSlots.map((slot, index) => {
+                const inheritedTz = getPrecedingTimezone(
+                  events,
+                  slot.time,
+                  defaultTimezone
+                );
+                return (
+                  <div
+                    key={index}
+                    className="vt-time-slot-label"
+                    style={{
+                      top: slot.topPx,
+                      height: slotHeightPx,
+                    }}
+                  >
+                    {renderTimeSlotLabel
+                      ? renderTimeSlotLabel(slot.time, inheritedTz)
+                      : formatTimeOnlyLabel(slot.time, inheritedTz)}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Tracks Container */}
         <div className="vt-tracks-container" style={{ height: totalHeightPx }}>
+          {/* Weekend Day Row Highlights */}
+          {dayBlocks.map((day) => {
+            const inheritedTz = getPrecedingTimezone(
+              events,
+              day.time,
+              defaultTimezone
+            );
+            if (!isWeekendDay(day.time, inheritedTz)) return null;
+            return (
+              <div
+                key={day.dayIndex}
+                className="vt-weekend-row-highlight"
+                style={{
+                  top: day.topPx,
+                  height: day.heightPx,
+                }}
+              />
+            );
+          })}
+
+          {/* Yellow Dotted Now Line Indicator */}
+          {/* Yellow Dotted Now Line Indicator */}
+          {isNowInRange && (
+            <div
+              className="vt-now-indicator-line"
+              style={{ top: nowTopPx }}
+            >
+              <div className="vt-now-indicator-badge">NOW</div>
+            </div>
+          )}
+
           {tracks.map((track) => {
             const layoutMap = trackOverlapLayouts.get(track.id);
             const trackEvents = events.filter((e) => {
@@ -683,6 +941,7 @@ export function VerticalTimeline({
                   else trackRefs.current.delete(track.id);
                 }}
                 className="vt-track-column"
+                onPointerDown={(e) => handleTrackPointerDown(e, track.id)}
                 onDoubleClick={(e) => handleTrackDoubleClick(e, track.id)}
               >
                 {/* Background Resolution Grid Slots */}
@@ -696,6 +955,28 @@ export function VerticalTimeline({
                     }}
                   />
                 ))}
+
+                {/* Drag-to-Create Ghost Event Preview */}
+                {createPreview && createPreview.trackId === track.id && (
+                  <div
+                    className={`vt-event is-creating ${
+                      createPreview.heightPx < 30 ? 'is-compact' : ''
+                    }`}
+                    style={{
+                      top: createPreview.topPx,
+                      height: createPreview.heightPx,
+                      left: 0,
+                      width: '100%',
+                    }}
+                  >
+                    <div className="vt-event-header">
+                      <span className="vt-event-title">+ New Event</span>
+                      <span className="vt-event-time">
+                        {createPreview.startLabel} - {createPreview.endLabel}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Events */}
                 {trackEvents.map((event) => {
@@ -713,7 +994,7 @@ export function VerticalTimeline({
                   const topPx = (startMs - originMs) * P;
                   const rawHeightPx = (endMs - startMs) * P;
                   const heightPx = Math.max(rawHeightPx, 20); // Section 7 defensive constraint
-                  const isCompactHeight = heightPx < 22;
+                  const isCompactHeight = heightPx <= 30;
 
                   const meta = layoutMap?.get(event.id) || {
                     widthPct: 100,
@@ -813,7 +1094,16 @@ export function VerticalTimeline({
         tracks={tracks}
         customFields={customPropertyFields}
         isOpen={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
+        minDate={startDate}
+        maxDate={endDate}
+        onClose={() => {
+          if (createdEventIdRef.current) {
+            const idToDelete = createdEventIdRef.current;
+            createdEventIdRef.current = null;
+            onEventDelete?.(idToDelete);
+          }
+          setIsDialogOpen(false);
+        }}
         onSave={handleSaveEventInternal}
         onDelete={onEventDelete}
       />

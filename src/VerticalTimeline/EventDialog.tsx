@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import './EventDialog.css';
 import {
   TimelineEvent,
   Track,
@@ -12,6 +13,8 @@ interface EventDialogProps {
   tracks: Track[];
   customFields?: CustomPropertyField[];
   isOpen: boolean;
+  minDate?: Date;
+  maxDate?: Date;
   onClose: () => void;
   onSave: (updatedEvent: TimelineEvent) => void;
   onDelete?: (eventId: string) => void;
@@ -49,12 +52,23 @@ export function EventDialog({
   tracks,
   customFields = [],
   isOpen,
+  minDate,
+  maxDate,
   onClose,
   onSave,
   onDelete,
 }: EventDialogProps) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  const minDatetimeLocal = useMemo(
+    () => (minDate ? toDatetimeLocal(minDate) : undefined),
+    [minDate]
+  );
+  const maxDatetimeLocal = useMemo(
+    () => (maxDate ? toDatetimeLocal(maxDate) : undefined),
+    [maxDate]
+  );
+
   const [trackId, setTrackId] = useState('');
   const [startDateTime, setStartDateTime] = useState('');
   const [startTimezone, setStartTimezone] = useState('');
@@ -74,8 +88,6 @@ export function EventDialog({
 
   useEffect(() => {
     if (event) {
-      setTitle(event.title || '');
-      setDescription(event.description || '');
       const activeTrackId = event.trackId || (tracks[0]?.id ?? '');
       setTrackId(activeTrackId);
       setStartDateTime(toDatetimeLocal(event.start.dateTime));
@@ -109,14 +121,55 @@ export function EventDialog({
     }
   }, [event, tracks, customFields]);
 
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (isOpen && event) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+    } else {
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+  }, [isOpen, event]);
+
   if (!isOpen || !event) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const normalizedCustomData: Record<string, unknown> = { ...customData };
+    for (const field of customFields) {
+      const rawVal = normalizedCustomData[field.key];
+      if (field.type === 'number') {
+        normalizedCustomData[field.key] =
+          typeof rawVal === 'number'
+            ? rawVal
+            : rawVal === '' || rawVal === null || rawVal === undefined
+            ? 0
+            : Number(rawVal) || 0;
+      } else if (field.type === 'currency') {
+        if (typeof rawVal === 'object' && rawVal !== null) {
+          const curr = rawVal as Record<string, unknown>;
+          const rawAmt = curr.amount;
+          normalizedCustomData[field.key] = {
+            currencySymbol: String(curr.currencySymbol || '$'),
+            amount:
+              typeof rawAmt === 'number'
+                ? rawAmt
+                : rawAmt === '' || rawAmt === null || rawAmt === undefined
+                ? 0
+                : Number(rawAmt) || 0,
+          };
+        }
+      }
+    }
+
     const updated: TimelineEvent = {
       ...event,
-      title,
-      description,
       trackId,
       start: {
         dateTime: fromDatetimeLocal(startDateTime),
@@ -126,7 +179,7 @@ export function EventDialog({
         dateTime: fromDatetimeLocal(endDateTime),
         timezone: endTimezone,
       },
-      data: customData,
+      data: normalizedCustomData,
     };
     onSave(updated);
     onClose();
@@ -137,39 +190,200 @@ export function EventDialog({
   };
 
   return (
-    <div className="vt-dialog-backdrop" onClick={onClose}>
-      <div className="vt-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="vt-dialog-header">
-          <h3>Edit Event Details</h3>
-          <button type="button" className="vt-dialog-close" onClick={onClose}>
-            &times;
-          </button>
-        </div>
+    <dialog
+      ref={dialogRef}
+      className="vt-dialog"
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      onClick={(e) => {
+        if (e.target === dialogRef.current) {
+          onClose();
+        }
+      }}
+    >
+      <div className="vt-dialog-header">
+        <h3>Edit Event Details</h3>
+        <button type="button" className="vt-dialog-close" onClick={onClose}>
+          &times;
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="vt-dialog-form">
-          <div className="vt-dialog-body">
-            {/* Title */}
-            <div className="vt-form-group">
-              <label>Event Title</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter event title..."
-                required
-              />
-            </div>
+      <form onSubmit={handleSubmit} className="vt-dialog-form">
+        <div className="vt-dialog-body">
+          {/* Custom Track Properties Section */}
+          {visibleFields.length > 0 && (
+            <div className="vt-dialog-section vt-dialog-section-first">
+              <div className="vt-dialog-section-title">
+                Custom Track Properties ({typeof tracks.find((t) => t.id === trackId)?.label === 'string' ? tracks.find((t) => t.id === trackId)?.label : trackId})
+              </div>
 
-            {/* Description */}
-            <div className="vt-form-group">
-              <label>Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Enter description..."
-                rows={2}
-              />
+              {visibleFields.map((field) => {
+                const currentValue = customData[field.key];
+
+                if (field.type === 'string') {
+                  return (
+                    <div key={field.key} className="vt-form-group">
+                      <label>{field.label}</label>
+                      <input
+                        type="text"
+                        value={String(currentValue ?? '')}
+                        onChange={(e) =>
+                          handleCustomFieldChange(field.key, e.target.value)
+                        }
+                        placeholder={`Enter ${field.label.toLowerCase()}...`}
+                      />
+                    </div>
+                  );
+                }
+
+                if (field.type === 'link') {
+                  return (
+                    <div key={field.key} className="vt-form-group">
+                      <label>{field.label} (URL)</label>
+                      <input
+                        type="url"
+                        value={String(currentValue ?? '')}
+                        onChange={(e) =>
+                          handleCustomFieldChange(field.key, e.target.value)
+                        }
+                        placeholder="https://..."
+                      />
+                    </div>
+                  );
+                }
+
+                if (field.type === 'boolean') {
+                  return (
+                    <div key={field.key} className="vt-form-group vt-checkbox-group">
+                      <label className="vt-checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(currentValue)}
+                          onChange={(e) =>
+                            handleCustomFieldChange(field.key, e.target.checked)
+                          }
+                        />
+                        <span>{field.label}</span>
+                      </label>
+                    </div>
+                  );
+                }
+
+                if (field.type === 'enum') {
+                  return (
+                    <div key={field.key} className="vt-form-group">
+                      <label>{field.label}</label>
+                      <select
+                        value={String(currentValue ?? field.options?.[0] ?? '')}
+                        onChange={(e) =>
+                          handleCustomFieldChange(field.key, e.target.value)
+                        }
+                      >
+                        {field.options?.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+
+                if (field.type === 'number') {
+                  const numberVal =
+                    currentValue === undefined || currentValue === null
+                      ? ''
+                      : currentValue;
+
+                  return (
+                    <div key={field.key} className="vt-form-group">
+                      <label>{field.label}</label>
+                      <input
+                        type="number"
+                        value={numberVal as string | number}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          handleCustomFieldChange(
+                            field.key,
+                            val === '' ? '' : (isNaN(Number(val)) ? val : Number(val))
+                          );
+                        }}
+                      />
+                    </div>
+                  );
+                }
+
+                if (field.type === 'currency') {
+                  const currObj =
+                    typeof currentValue === 'object' && currentValue !== null
+                      ? (currentValue as Record<string, unknown>)
+                      : {
+                          amount: typeof currentValue === 'number' ? currentValue : 0,
+                          currencySymbol: '$',
+                        };
+
+                  const selectedSymbol = String(currObj.currencySymbol || '$');
+                  const amountVal =
+                    currObj.amount === undefined || currObj.amount === null
+                      ? ''
+                      : currObj.amount;
+
+                  return (
+                    <div key={field.key} className="vt-form-group">
+                      <label>{field.label} (Currency & Amount)</label>
+                      <div className="vt-currency-input-row">
+                        <select
+                          className="vt-currency-symbol-input"
+                          value={selectedSymbol}
+                          onChange={(e) =>
+                            handleCustomFieldChange(field.key, {
+                              ...currObj,
+                              currencySymbol: e.target.value,
+                            })
+                          }
+                        >
+                          {!supportedCurrencies.includes(selectedSymbol) && (
+                            <option value={selectedSymbol}>{currencyAsSymbol(selectedSymbol)}</option>
+                          )}
+                          {supportedCurrencies.map((c) => (
+                            <option key={c} value={c}>
+                              {currencyAsSymbol(c)}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="vt-currency-amount-input"
+                          value={amountVal as string | number}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            handleCustomFieldChange(field.key, {
+                              ...currObj,
+                              amount: val === '' ? '' : (isNaN(Number(val)) ? val : Number(val)),
+                            });
+                          }}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                return null;
+              })}
             </div>
+          )}
+
+          {/* Timeline & Track Assignment Section */}
+          <div
+            className={`vt-dialog-section ${
+              visibleFields.length > 0 ? 'vt-dialog-section-divider' : 'vt-dialog-section-first'
+            }`}
+          >
+            <div className="vt-dialog-section-title">Timeline & Track Assignment</div>
 
             {/* Track Selector */}
             <div className="vt-form-group">
@@ -194,6 +408,8 @@ export function EventDialog({
                   type="datetime-local"
                   step="1"
                   value={startDateTime}
+                  min={minDatetimeLocal}
+                  max={maxDatetimeLocal}
                   onChange={(e) => setStartDateTime(e.target.value)}
                   required
                 />
@@ -224,6 +440,8 @@ export function EventDialog({
                   type="datetime-local"
                   step="1"
                   value={endDateTime}
+                  min={minDatetimeLocal}
+                  max={maxDatetimeLocal}
                   onChange={(e) => setEndDateTime(e.target.value)}
                   required
                 />
@@ -246,175 +464,22 @@ export function EventDialog({
                 </select>
               </div>
             </div>
-
-            {/* Custom Properties Section */}
-            {visibleFields.length > 0 && (
-              <div className="vt-dialog-section">
-                <div className="vt-dialog-section-title">
-                  Custom Track Properties ({tracks.find((t) => t.id === trackId)?.label})
-                </div>
-
-                {visibleFields.map((field) => {
-                  const currentValue = customData[field.key];
-
-                  if (field.type === 'string') {
-                    return (
-                      <div key={field.key} className="vt-form-group">
-                        <label>{field.label}</label>
-                        <input
-                          type="text"
-                          value={String(currentValue ?? '')}
-                          onChange={(e) =>
-                            handleCustomFieldChange(field.key, e.target.value)
-                          }
-                          placeholder={`Enter ${field.label.toLowerCase()}...`}
-                        />
-                      </div>
-                    );
-                  }
-
-                  if (field.type === 'link') {
-                    return (
-                      <div key={field.key} className="vt-form-group">
-                        <label>{field.label} (URL)</label>
-                        <input
-                          type="url"
-                          value={String(currentValue ?? '')}
-                          onChange={(e) =>
-                            handleCustomFieldChange(field.key, e.target.value)
-                          }
-                          placeholder="https://..."
-                        />
-                      </div>
-                    );
-                  }
-
-                  if (field.type === 'boolean') {
-                    return (
-                      <div key={field.key} className="vt-form-group vt-checkbox-group">
-                        <label className="vt-checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(currentValue)}
-                            onChange={(e) =>
-                              handleCustomFieldChange(field.key, e.target.checked)
-                            }
-                          />
-                          <span>{field.label}</span>
-                        </label>
-                      </div>
-                    );
-                  }
-
-                  if (field.type === 'enum') {
-                    return (
-                      <div key={field.key} className="vt-form-group">
-                        <label>{field.label}</label>
-                        <select
-                          value={String(currentValue ?? field.options?.[0] ?? '')}
-                          onChange={(e) =>
-                            handleCustomFieldChange(field.key, e.target.value)
-                          }
-                        >
-                          {field.options?.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  }
-
-                  if (field.type === 'number') {
-                    return (
-                      <div key={field.key} className="vt-form-group">
-                        <label>{field.label}</label>
-                        <input
-                          type="number"
-                          value={Number(currentValue ?? 0)}
-                          onChange={(e) =>
-                            handleCustomFieldChange(
-                              field.key,
-                              Number(e.target.value)
-                            )
-                          }
-                        />
-                      </div>
-                    );
-                  }
-
-                  if (field.type === 'currency') {
-                    const currObj =
-                      typeof currentValue === 'object' && currentValue !== null
-                        ? (currentValue as CustomCurrencyValue)
-                        : {
-                            amount: typeof currentValue === 'number' ? currentValue : 0,
-                            currencySymbol: '$',
-                          };
-
-                    const selectedSymbol = currObj.currencySymbol || '$';
-
-                    return (
-                      <div key={field.key} className="vt-form-group">
-                        <label>{field.label} (Currency & Amount)</label>
-                        <div className="vt-currency-input-row">
-                          <select
-                            className="vt-currency-symbol-input"
-                            value={selectedSymbol}
-                            onChange={(e) =>
-                              handleCustomFieldChange(field.key, {
-                                ...currObj,
-                                currencySymbol: e.target.value,
-                              })
-                            }
-                          >
-                            {!supportedCurrencies.includes(selectedSymbol) && (
-                              <option value={selectedSymbol}>{currencyAsSymbol(selectedSymbol)}</option>
-                            )}
-                            {supportedCurrencies.map((c) => (
-                              <option key={c} value={c}>
-                                {currencyAsSymbol(c)}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            type="number"
-                            step="0.01"
-                            className="vt-currency-amount-input"
-                            value={currObj.amount ?? 0}
-                            onChange={(e) =>
-                              handleCustomFieldChange(field.key, {
-                                ...currObj,
-                                amount: Number(e.target.value),
-                              })
-                            }
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return null;
-                })}
-              </div>
-            )}
           </div>
+        </div>
 
-          <div className="vt-dialog-footer">
-            {onDelete && (
-              <button
-                type="button"
-                className="vt-btn vt-btn-danger"
-                onClick={() => {
-                  onDelete(event.id);
-                  onClose();
-                }}
-              >
-                Delete Event
-              </button>
-            )}
+        <div className="vt-dialog-footer">
+          {onDelete && (
+            <button
+              type="button"
+              className="vt-btn vt-btn-danger"
+              onClick={() => {
+                onDelete(event.id);
+                onClose();
+              }}
+            >
+              Delete Event
+            </button>
+          )}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button
                 type="button"
@@ -429,7 +494,6 @@ export function EventDialog({
             </div>
           </div>
         </form>
-      </div>
-    </div>
+    </dialog>
   );
 }
