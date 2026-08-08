@@ -218,7 +218,8 @@ If $S_{\text{prev}} \neq \emptyset$, the algorithm selects $E_{\text{closest}}$ 
 | `onEventCreate` | `(newEvent: TimelineEvent) => void` | `undefined` | Callback fired when a new event is created via drag-to-create on empty track space. |
 | `onEventSave` | `(updatedEvent: TimelineEvent) => void` | `undefined` | Callback fired when an event is saved via the built-in dialog. |
 | `onEventDelete` | `(eventId: string) => void` | `undefined` | Callback fired when an event is deleted via the built-in dialog. |
-| `onEventClick` | `(event: TimelineEvent) => void` | `undefined` | Callback fired when an event is clicked. |
+| `onEventClick` | `(event: TimelineEvent) => void` | `undefined` | Callback fired when an event card is left-clicked. |
+| `onEventContextMenu` | `(event: TimelineEvent, e: MouseEvent) => void` | `undefined` | Callback fired when an event card is right-clicked (contextmenu event). |
 | `onSlotDoubleClick` | `(trackId, timestamp, tz) => void` | `undefined` | Callback fired when double-clicking a grid slot (returns inherited tz). |
 
 ---

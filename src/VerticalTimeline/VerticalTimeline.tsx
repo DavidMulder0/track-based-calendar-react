@@ -79,6 +79,7 @@ export function VerticalTimeline({
   onEventSave,
   onEventDelete,
   onEventClick,
+  onEventContextMenu,
   onEventCreate,
   onSlotDoubleClick,
   className = '',
@@ -1027,6 +1028,11 @@ export function VerticalTimeline({
                       onClick={(e) => {
                         e.stopPropagation();
                         handleEventClickInternal(event);
+                      }}
+                      onContextMenu={(e) => {
+                        if (onEventContextMenu) {
+                          onEventContextMenu(event, e);
+                        }
                       }}
                     >
                       {/* Top Resize Handle */}

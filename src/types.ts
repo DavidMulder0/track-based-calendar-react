@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, MouseEvent } from 'react';
 
 /** Slots per 24-hour day cycle */
 export type Resolution = 1 | 2 | 3 | 4 | 6 | 8 | 12 | 24 | 48 | 96;
@@ -121,6 +121,11 @@ export interface VerticalTimelineProps {
   onEventSave?: (updatedEvent: TimelineEvent) => void;
   onEventDelete?: (eventId: string) => void;
   onEventClick?: (event: TimelineEvent) => void;
+  /** Called when an event is right-clicked (contextmenu event). */
+  onEventContextMenu?: (
+    event: TimelineEvent,
+    e: MouseEvent<HTMLDivElement>
+  ) => void;
   /** Called when a new event is created via drag-to-create on empty track space. */
   onEventCreate?: (newEvent: TimelineEvent) => void;
   onSlotDoubleClick?: (
