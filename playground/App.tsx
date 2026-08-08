@@ -206,6 +206,18 @@ export function App() {
   const startDate = new Date("2026-06-01T00:00:00.000Z");
   const endDate = new Date("2026-06-03T00:00:00.000Z");
 
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    event: TimelineEvent;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleGlobalClick = () => setContextMenu(null);
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
+  }, []);
+
   const addLog = (msg: string) => {
     setLogMessages((prev) => [
       `[${new Date().toLocaleTimeString()}] ${msg}`,
@@ -567,7 +579,16 @@ export function App() {
           onEventSave={handleEventSave}
           onEventDelete={handleEventDelete}
           onSlotDoubleClick={handleSlotDoubleClick}
-          onEventClick={(evt) => addLog(`Clicked "${evt.title}"`)}
+          onEventClick={(evt) => addLog(`Clicked "${evt.title || evt.id}"`)}
+          onEventContextMenu={(evt, e) => {
+            e.preventDefault();
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              event: evt,
+            });
+            addLog(`Right-clicked event "${evt.title || evt.id}" (Context Menu)`);
+          }}
           renderEvent={(event) => {
             const costObj = event.data?.cost as CustomCurrencyValue | undefined;
             const formatter = new Intl.NumberFormat("en-US", {
@@ -757,6 +778,66 @@ export function App() {
           ))}
         </div>
       </div>
+
+      {/* Floating Custom Context Menu */}
+      {contextMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: contextMenu.y,
+            left: contextMenu.x,
+            background: "#1e293b",
+            border: "1px solid #475569",
+            borderRadius: 8,
+            padding: "4px 0",
+            zIndex: 9999,
+            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+            minWidth: 160,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              padding: "8px 14px",
+              fontSize: "0.8rem",
+              color: "#f8fafc",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              borderBottom: "1px solid #334155",
+            }}
+            onClick={() => {
+              addLog(
+                `Context Menu: Editing "${contextMenu.event.title || contextMenu.event.id}"`
+              );
+              setContextMenu(null);
+            }}
+          >
+            ✏️ Edit Event
+          </div>
+          <div
+            style={{
+              padding: "8px 14px",
+              fontSize: "0.8rem",
+              color: "#f87171",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+            onClick={() => {
+              handleEventDelete(contextMenu.event.id);
+              addLog(
+                `Context Menu: Deleted "${contextMenu.event.title || contextMenu.event.id}"`
+              );
+              setContextMenu(null);
+            }}
+          >
+            🗑️ Delete Event
+          </div>
+        </div>
+      )}
     </div>
   );
 }
