@@ -32,10 +32,11 @@ export function isChildTrack(
 export function getEnclosedChildEvents(
   parentEvent: TimelineEvent,
   events: TimelineEvent[],
-  tracks: Track[]
+  tracks: Track[],
+  activeTimezone?: string
 ): TimelineEvent[] {
-  const pStartMs = toEpochMs(parentEvent.start.dateTime);
-  const pEndMs = toEpochMs(parentEvent.end.dateTime);
+  const pStartMs = toEpochMs(parentEvent.start, activeTimezone);
+  const pEndMs = toEpochMs(parentEvent.end, activeTimezone);
 
   const enclosed: TimelineEvent[] = [];
 
@@ -44,8 +45,8 @@ export function getEnclosedChildEvents(
 
     // Check if event is on a child track of parentEvent's track
     if (isChildTrack(event.trackId, parentEvent.trackId, tracks)) {
-      const cStartMs = toEpochMs(event.start.dateTime);
-      const cEndMs = toEpochMs(event.end.dateTime);
+      const cStartMs = toEpochMs(event.start, activeTimezone);
+      const cEndMs = toEpochMs(event.end, activeTimezone);
 
       // Fully falls within parent event temporal range
       if (cStartMs >= pStartMs && cEndMs <= pEndMs) {

@@ -231,12 +231,12 @@ export function getPrecedingTimezone(
   defaultTimezone?: string,
 ): string {
   const targetMs =
-    typeof targetTime === "number" ? targetTime : toEpochMs(targetTime);
+    typeof targetTime === "number" ? targetTime : toEpochMs(targetTime, defaultTimezone);
 
   const eventStartMap = events
     .map((e) => ({
       event: e,
-      startMs: toEpochMs(e.start.dateTime),
+      startMs: toEpochMs(e.start, defaultTimezone),
     }))
     .filter((item) => !isNaN(item.startMs));
 

@@ -7,14 +7,15 @@ export function findOverlappingEvents(
   nextStartMs: number,
   nextEndMs: number,
   targetTrackId: string,
-  events: TimelineEvent[]
+  events: TimelineEvent[],
+  activeTimezone?: string
 ): TimelineEvent[] {
   return events.filter((e) => {
     if (e.id === movedEventId) return false;
     if (e.trackId !== targetTrackId) return false;
 
-    const startMs = toEpochMs(e.start.dateTime);
-    const endMs = toEpochMs(e.end.dateTime);
+    const startMs = toEpochMs(e.start, activeTimezone);
+    const endMs = toEpochMs(e.end, activeTimezone);
 
     return startMs < nextEndMs && endMs > nextStartMs;
   });
@@ -46,13 +47,14 @@ export function resolvePushEvents(
   nextEndMs: number,
   targetTrackId: string,
   events: TimelineEvent[],
-  tracks: Track[]
+  tracks: Track[],
+  activeTimezone?: string
 ): ResolvedEventChange[] {
   const targetEvent = events.find((e) => e.id === movedEventId);
   if (!targetEvent) return [];
 
-  const initialStartMs = toEpochMs(targetEvent.start.dateTime);
-  const initialEndMs = toEpochMs(targetEvent.end.dateTime);
+  const initialStartMs = toEpochMs(targetEvent.start, activeTimezone);
+  const initialEndMs = toEpochMs(targetEvent.end, activeTimezone);
 
   // Direction: upward if top boundary moved earlier or end boundary moved earlier
   const isUpward =
@@ -65,8 +67,8 @@ export function resolvePushEvents(
   const boundsMap = new Map<string, BoundsItem>();
 
   for (const e of events) {
-    const s = toEpochMs(e.start.dateTime);
-    const end = toEpochMs(e.end.dateTime);
+    const s = toEpochMs(e.start, activeTimezone);
+    const end = toEpochMs(e.end, activeTimezone);
     boundsMap.set(e.id, {
       event: e,
       initialStartMs: s,
@@ -87,7 +89,7 @@ export function resolvePushEvents(
 
   // Move enclosed child events of targetEvent if it moved
   if (moveDeltaMs !== 0) {
-    const directChildren = getEnclosedChildEvents(targetEvent, events, tracks);
+    const directChildren = getEnclosedChildEvents(targetEvent, events, tracks, activeTimezone);
     for (const child of directChildren) {
       const childItem = boundsMap.get(child.id);
       if (childItem) {
@@ -101,7 +103,7 @@ export function resolvePushEvents(
   // Pre-calculate parent-child relationships for cascading
   const childMap = new Map<string, TimelineEvent[]>();
   for (const e of events) {
-    const enclosed = getEnclosedChildEvents(e, events, tracks);
+    const enclosed = getEnclosedChildEvents(e, events, tracks, activeTimezone);
     if (enclosed.length > 0) {
       childMap.set(e.id, enclosed);
     }
@@ -219,7 +221,8 @@ export function resolveShortenEvents(
   nextStartMs: number,
   nextEndMs: number,
   targetTrackId: string,
-  events: TimelineEvent[]
+  events: TimelineEvent[],
+  activeTimezone?: string
 ): ResolvedEventChange[] {
   const result: ResolvedEventChange[] = [];
   const overlaps = findOverlappingEvents(
@@ -227,12 +230,13 @@ export function resolveShortenEvents(
     nextStartMs,
     nextEndMs,
     targetTrackId,
-    events
+    events,
+    activeTimezone
   );
 
   for (const event of overlaps) {
-    const origStart = toEpochMs(event.start.dateTime);
-    const origEnd = toEpochMs(event.end.dateTime);
+    const origStart = toEpochMs(event.start, activeTimezone);
+    const origEnd = toEpochMs(event.end, activeTimezone);
     let newStart = origStart;
     let newEnd = origEnd;
 

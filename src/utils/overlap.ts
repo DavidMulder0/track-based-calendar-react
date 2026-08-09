@@ -9,7 +9,11 @@ export interface EventLayoutMeta {
 }
 
 export function computeTrackOverlapLayout(
-  trackEvents: TimelineEvent[]
+  trackEvents: TimelineEvent[],
+  activeTimezone?: string,
+  originMs?: number,
+  scaleFactor?: number,
+  minHeightPx: number = 24
 ): Map<string, EventLayoutMeta> {
   const result = new Map<string, EventLayoutMeta>();
 
@@ -17,15 +21,27 @@ export function computeTrackOverlapLayout(
     return result;
   }
 
-  // Map events to items with calculated epoch ms and duration
+  // Map events to items with calculated epoch ms and duration (or visual pixel bounds if scaleFactor provided)
   const items = trackEvents.map((event) => {
-    const startMs = toEpochMs(event.start.dateTime);
-    const endMs = toEpochMs(event.end.dateTime);
-    const duration = endMs - startMs;
+    const startMs = toEpochMs(event.start, activeTimezone);
+    const endMs = toEpochMs(event.end, activeTimezone);
+    const duration = Math.max(endMs - startMs, 1);
+
+    let startBound = startMs;
+    let endBound = Math.max(endMs, startMs + 1);
+
+    if (originMs !== undefined && scaleFactor !== undefined && scaleFactor > 0) {
+      const topPx = (startMs - originMs) * scaleFactor;
+      const rawHeightPx = (endMs - startMs) * scaleFactor;
+      const heightPx = Math.max(rawHeightPx, minHeightPx);
+      startBound = topPx;
+      endBound = topPx + heightPx;
+    }
+
     return {
       event,
-      startMs,
-      endMs: Math.max(endMs, startMs + 1), // ensure min duration for overlap check
+      startMs: startBound,
+      endMs: endBound,
       duration,
     };
   });

@@ -216,10 +216,13 @@ export function VerticalTimeline({
     >();
     for (const track of tracks) {
       const trackEvents = events.filter((e) => e.trackId === track.id);
-      layouts.set(track.id, computeTrackOverlapLayout(trackEvents));
+      layouts.set(
+        track.id,
+        computeTrackOverlapLayout(trackEvents, activeTimezone, originMs, P, 24)
+      );
     }
     return layouts;
-  }, [tracks, events]);
+  }, [tracks, events, activeTimezone, originMs, P]);
 
   // Handle Drag Pointer Events
   const handlePointerDown = (
@@ -503,7 +506,8 @@ export function VerticalTimeline({
             nextStartMs,
             nextEndMs,
             ds.currentTrackId,
-            eventsRef.current
+            eventsRef.current,
+            activeTimezoneRef.current
           );
 
           if (overlaps.length > 0) {
@@ -594,7 +598,8 @@ export function VerticalTimeline({
         nextEndMs,
         nextTrackId,
         events,
-        tracks
+        tracks,
+        activeTimezone
       );
       for (const change of pushedChanges) {
         const pTzStart = change.event.start.timezone || activeTimezoneRef.current;
@@ -618,7 +623,8 @@ export function VerticalTimeline({
         nextStartMs,
         nextEndMs,
         nextTrackId,
-        events
+        events,
+        activeTimezone
       );
       for (const change of shortenedChanges) {
         const sTzStart = change.event.start.timezone || activeTimezoneRef.current;
