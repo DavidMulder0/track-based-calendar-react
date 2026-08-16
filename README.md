@@ -184,6 +184,7 @@ If $S_{\text{prev}} \neq \emptyset$, the algorithm selects $E_{\text{closest}}$ 
 | `resolution` | `Resolution` | `1` | Number of slots per day (`1, 2, 3, 4, 6, 8, 12, 24, 48, 96`). |
 | `dayHeight` | `number` | `240` | Visual height in pixels for a 24-hour day row. |
 | `snapToMinutesOverride`| `number` | `undefined` | Optional drag snap override in minutes (e.g. `15`, `30`, `60`). |
+| `touchInteractionMode` | `'scroll-only' \| 'tap-select' \| 'drag-edit'` | `'tap-select'` | Controls direct touch behavior. Normal touch modes preserve native scrolling; `drag-edit` explicitly enables touch drag, resize, and drag-to-create. |
 | `timezone` | `string` | System Local | Primary IANA timezone identifier for rendering date/time columns and newly created events. |
 | `defaultTimezone` | `string` | System Local | Fallback IANA timezone identifier when `timezone` prop is omitted. |
 | `renderEvent` | `Function` | `undefined` | Custom render prop for event card content. |
@@ -195,6 +196,14 @@ If $S_{\text{prev}} \neq \emptyset$, the algorithm selects $E_{\text{closest}}$ 
 | `onEventClick` | `(event: TimelineEvent) => void` | `undefined` | Callback fired when an event card is left-clicked. |
 | `onEventContextMenu` | `(event: TimelineEvent, e: MouseEvent) => void` | `undefined` | Callback fired when an event card is right-clicked (contextmenu event). |
 | `onSlotDoubleClick` | `(trackId, timestamp, tz) => void` | `undefined` | Callback fired when double-clicking a grid slot (returns inherited tz). |
+
+### Touch interaction modes
+
+- `tap-select` keeps native touch scrolling and allows a deliberate tap on an event to call `onEventClick`. Touches never drag, resize, or create events.
+- `scroll-only` keeps native touch scrolling and ignores event taps as well as editing gestures.
+- `drag-edit` reserves direct touch gestures for event dragging, resizing, and drag-to-create. Use it when the surrounding UI provides an explicit editing mode, because native timeline panning is disabled while it is active.
+
+Mouse and pen drag-to-create begins only after the pointer moves beyond a small activation threshold. Canceled pointer gestures never commit changes.
 
 ---
 

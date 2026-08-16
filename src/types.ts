@@ -3,6 +3,9 @@ import { ReactNode, MouseEvent } from 'react';
 /** Slots per 24-hour day cycle */
 export type Resolution = 1 | 2 | 3 | 4 | 6 | 8 | 12 | 24 | 48 | 96;
 
+/** Controls how direct touch input interacts with timeline events. */
+export type TouchInteractionMode = 'scroll-only' | 'tap-select' | 'drag-edit';
+
 export interface TimezoneBound {
   dateTime: Date | string; // ISO string or Date instance
   timezone: string;       // IANA timezone identifier, e.g. "America/New_York"
@@ -72,6 +75,13 @@ export interface VerticalTimelineProps {
    * If omitted, DnD snaps directly to resolution slot intervals.
    */
   snapToMinutesOverride?: number;
+
+  /**
+   * Touch interaction policy. Touch gestures navigate the timeline by default;
+   * event dragging and drag-to-create require the explicit `drag-edit` mode.
+   * Default: 'tap-select'
+   */
+  touchInteractionMode?: TouchInteractionMode;
 
   /** Primary timezone for rendering the date/time axis and newly created events. */
   timezone?: string;

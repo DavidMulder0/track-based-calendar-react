@@ -68,6 +68,9 @@
 .vt-header-time-axis {
   width: 160px;
   min-width: 160px;
+  position: sticky;
+  left: 0;
+  z-index: 25;
   display: flex;
   border-right: 1px solid var(--vt-color-border);
   background: var(--vt-color-surface);
@@ -98,11 +101,10 @@
 .vt-header-tracks {
   display: flex;
   flex: 1;
-  overflow: hidden;
 }
 
 .vt-track-header {
-  flex: 1;
+  flex: 1 0 160px;
   min-width: 160px;
   padding: 10px 16px;
   border-right: 1px solid var(--vt-color-border);
@@ -135,9 +137,21 @@
 }
 
 .vt-body-scroll {
-  display: flex;
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vt-scroll-content {
+  width: max-content;
+  min-width: 100%;
+}
+
+.vt-timeline-body {
+  display: flex;
   position: relative;
 }
 
@@ -299,11 +313,10 @@
   display: flex;
   flex: 1;
   position: relative;
-  min-width: fit-content;
 }
 
 .vt-track-column {
-  flex: 1;
+  flex: 1 0 160px;
   min-width: 160px;
   position: relative;
   border-right: 1px solid var(--vt-color-border);
@@ -313,6 +326,13 @@
 
 .vt-track-column:last-child {
   border-right: none;
+}
+
+/* Touch input navigates by default. Opt-in edit mode reserves gestures for DnD. */
+.vertical-timeline.is-touch-edit-enabled .vt-track-column,
+.vertical-timeline.is-touch-edit-enabled .vt-event,
+.vertical-timeline.is-touch-edit-enabled .vt-resize-handle {
+  touch-action: none;
 }
 
 .vt-grid-slot {

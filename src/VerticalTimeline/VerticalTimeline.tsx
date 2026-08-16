@@ -42,6 +42,7 @@ interface ChildInitialState {
 }
 
 interface DragState {
+  pointerId: number;
   eventId: string;
   action: DragAction;
   initialPointerY: number;
@@ -70,6 +71,7 @@ export function VerticalTimeline({
   resolution = 1,
   dayHeight = 240,
   snapToMinutesOverride,
+  touchInteractionMode = 'tap-select',
   timezone,
   defaultTimezone,
   renderEvent,
@@ -86,6 +88,7 @@ export function VerticalTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const wasDraggingRef = useRef<boolean>(false);
+  const lastPointerTypeRef = useRef<string>('mouse');
 
   const activeTimezone = useMemo(
     () => timezone || defaultTimezone || getSystemTimezone(),
@@ -95,11 +98,14 @@ export function VerticalTimeline({
   const [dragState, setDragState] = useState<DragState | null>(null);
 
   interface CreateDragState {
+    pointerId: number;
     trackId: string;
     anchorStartMs: number;
+    initialPointerX: number;
     initialPointerY: number;
     currentPointerY: number;
     initialOffsetY: number;
+    activated: boolean;
   }
 
   const [createDragState, setCreateDragState] = useState<CreateDragState | null>(null);
@@ -221,14 +227,18 @@ export function VerticalTimeline({
     action: DragAction
   ) => {
     e.stopPropagation();
+    if (!e.isPrimary || e.button !== 0) return;
+    lastPointerTypeRef.current = e.pointerType;
+    wasDraggingRef.current = false;
+    if (e.pointerType === 'touch' && touchInteractionMode !== 'drag-edit') {
+      return;
+    }
     if (action === 'move' && event.isDraggable === false) return;
     if (
       (action === 'resize-top' || action === 'resize-bottom') &&
       event.isResizable === false
     )
       return;
-
-    wasDraggingRef.current = false;
 
     const startMs = toEpochMs(event.start, activeTimezone);
     const endMs = toEpochMs(event.end, activeTimezone);
@@ -242,6 +252,7 @@ export function VerticalTimeline({
     }));
 
     setDragState({
+      pointerId: e.pointerId,
       eventId: event.id,
       action,
       initialPointerY: e.clientY,
@@ -264,7 +275,12 @@ export function VerticalTimeline({
     e: React.PointerEvent<HTMLDivElement>,
     trackId: string
   ) => {
-    if (e.button !== 0) return;
+    if (!e.isPrimary || e.button !== 0) return;
+    lastPointerTypeRef.current = e.pointerType;
+    wasDraggingRef.current = false;
+    if (e.pointerType === 'touch' && touchInteractionMode !== 'drag-edit') {
+      return;
+    }
 
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
@@ -274,11 +290,14 @@ export function VerticalTimeline({
     const anchorStartMs = originMs + anchorSlotIndex * activeSnapMs;
 
     setCreateDragState({
+      pointerId: e.pointerId,
       trackId,
       anchorStartMs,
+      initialPointerX: e.clientX,
       initialPointerY: e.clientY,
       currentPointerY: e.clientY,
       initialOffsetY: offsetY,
+      activated: false,
     });
 
     try {
@@ -327,15 +346,26 @@ export function VerticalTimeline({
 
     const handleWindowPointerMove = (e: PointerEvent) => {
       if (createDragStateRef.current) {
-        setCreateDragState((prev) =>
-          prev ? { ...prev, currentPointerY: e.clientY } : null
-        );
-        wasDraggingRef.current = true;
+        const pendingCreate = createDragStateRef.current;
+        if (e.pointerId !== pendingCreate.pointerId) return;
+        const deltaX = e.clientX - pendingCreate.initialPointerX;
+        const deltaY = e.clientY - pendingCreate.initialPointerY;
+        const activated =
+          pendingCreate.activated || Math.hypot(deltaX, deltaY) > 4;
+        const nextCreateState = {
+          ...pendingCreate,
+          currentPointerY: e.clientY,
+          activated,
+        };
+        createDragStateRef.current = nextCreateState;
+        setCreateDragState(nextCreateState);
+        if (activated) wasDraggingRef.current = true;
         return;
       }
 
       const ds = dragStateRef.current;
       if (!ds) return;
+      if (e.pointerId !== ds.pointerId) return;
 
       const deltaY = e.clientY - ds.initialPointerY;
 
@@ -356,21 +386,24 @@ export function VerticalTimeline({
         wasDraggingRef.current = true;
       }
 
-      setDragState((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentDeltaY: deltaY,
-              currentTrackId: targetTrackId,
-            }
-          : null
-      );
+      const nextDragState = {
+        ...ds,
+        currentDeltaY: deltaY,
+        currentTrackId: targetTrackId,
+      };
+      dragStateRef.current = nextDragState;
+      setDragState(nextDragState);
     };
 
     const handleWindowPointerUp = (e: PointerEvent) => {
       // 1. Handle Drag-to-Create completion
       if (createDragStateRef.current) {
         const cds = createDragStateRef.current;
+        if (e.pointerId !== cds.pointerId) return;
+        if (!cds.activated) {
+          setCreateDragState(null);
+          return;
+        }
         const deltaY = cds.currentPointerY - cds.initialPointerY;
         const currentOffsetY = cds.initialOffsetY + deltaY;
         const currentRawMs = originMs + currentOffsetY / P;
@@ -421,6 +454,7 @@ export function VerticalTimeline({
       // 2. Handle Event Move / Resize completion
       const ds = dragStateRef.current;
       if (!ds) return;
+      if (e.pointerId !== ds.pointerId) return;
 
       const rawDeltaMs = ds.currentDeltaY / P;
       const snappedDeltaMs =
@@ -533,14 +567,27 @@ export function VerticalTimeline({
       setDragState(null);
     };
 
+    const handleWindowPointerCancel = (e: PointerEvent) => {
+      // A browser commonly cancels touch pointers when it takes over scrolling.
+      // Cancellation must never commit a create, move, or resize operation.
+      const activePointerId =
+        dragStateRef.current?.pointerId ?? createDragStateRef.current?.pointerId;
+      if (activePointerId !== e.pointerId) return;
+      if (dragStateRef.current || createDragStateRef.current) {
+        wasDraggingRef.current = true;
+      }
+      setDragState(null);
+      setCreateDragState(null);
+    };
+
     window.addEventListener('pointermove', handleWindowPointerMove);
     window.addEventListener('pointerup', handleWindowPointerUp);
-    window.addEventListener('pointercancel', handleWindowPointerUp);
+    window.addEventListener('pointercancel', handleWindowPointerCancel);
 
     return () => {
       window.removeEventListener('pointermove', handleWindowPointerMove);
       window.removeEventListener('pointerup', handleWindowPointerUp);
-      window.removeEventListener('pointercancel', handleWindowPointerUp);
+      window.removeEventListener('pointercancel', handleWindowPointerCancel);
     };
   }, [
     dragState,
@@ -694,7 +741,7 @@ export function VerticalTimeline({
 
   // Compute Creation Drag Ghost Event Preview
   const createPreview = useMemo(() => {
-    if (!createDragState) return null;
+    if (!createDragState?.activated) return null;
 
     const deltaY =
       createDragState.currentPointerY - createDragState.initialPointerY;
@@ -738,6 +785,12 @@ export function VerticalTimeline({
     e: React.MouseEvent<HTMLDivElement>,
     trackId: string
   ) => {
+    if (
+      lastPointerTypeRef.current === 'touch' &&
+      touchInteractionMode !== 'drag-edit'
+    ) {
+      return;
+    }
     if (!onSlotDoubleClick) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
@@ -758,64 +811,79 @@ export function VerticalTimeline({
       return;
     }
 
+    if (
+      lastPointerTypeRef.current === 'touch' &&
+      touchInteractionMode === 'scroll-only'
+    ) {
+      return;
+    }
+
     onEventClick?.(event);
   };
 
   return (
     <div
       ref={containerRef}
-      className={`vertical-timeline ${className}`}
+      className={`vertical-timeline ${
+        touchInteractionMode === 'drag-edit' ? 'is-touch-edit-enabled' : ''
+      } ${className}`}
     >
-      {/* Header */}
-      <div className="vt-header">
-        <div
-          className={`vt-header-time-axis ${isCompactRow ? 'is-compact-row' : ''} ${
-            isSingleSlotPerDay ? 'is-single-slot' : ''
-          }`}
-        >
-          <div className="vt-header-day-subcol">Date</div>
-          {!isSingleSlotPerDay && <div className="vt-header-time-subcol">Time</div>}
-        </div>
-        <div className="vt-header-tracks">
-          {tracks.map((track) => (
+      {/* Header and timeline share one scroll viewport so their columns stay aligned. */}
+      <div className="vt-body-scroll">
+        <div className="vt-scroll-content">
+          <div className="vt-header">
             <div
-              key={track.id}
-              className="vt-track-header"
-              style={{
-                paddingLeft: track.parentId ? 24 : 16,
-              }}
+              className={`vt-header-time-axis ${
+                isCompactRow ? 'is-compact-row' : ''
+              } ${isSingleSlotPerDay ? 'is-single-slot' : ''}`}
             >
-              {renderTrackHeader ? (
-                renderTrackHeader(track)
-              ) : (
-                <>
-                  <div className="vt-track-title">
-                    {track.parentId && (
-                      <span
-                        style={{
-                          fontSize: '0.7rem',
-                          color: 'var(--vt-color-accent)',
-                          marginRight: 6,
-                        }}
-                      >
-                        ↳
-                      </span>
-                    )}
-                    {track.label}
-                  </div>
-                  {track.subtitle && (
-                    <div className="vt-track-subtitle">{track.subtitle}</div>
-                  )}
-                </>
+              <div className="vt-header-day-subcol">Date</div>
+              {!isSingleSlotPerDay && (
+                <div className="vt-header-time-subcol">Time</div>
               )}
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="vt-header-tracks">
+              {tracks.map((track) => (
+                <div
+                  key={track.id}
+                  className="vt-track-header"
+                  style={{
+                    paddingLeft: track.parentId ? 24 : 16,
+                  }}
+                >
+                  {renderTrackHeader ? (
+                    renderTrackHeader(track)
+                  ) : (
+                    <>
+                      <div className="vt-track-title">
+                        {track.parentId && (
+                          <span
+                            style={{
+                              fontSize: '0.7rem',
+                              color: 'var(--vt-color-accent)',
+                              marginRight: 6,
+                            }}
+                          >
+                            ↳
+                          </span>
+                        )}
+                        {track.label}
+                      </div>
+                      {track.subtitle && (
+                        <div className="vt-track-subtitle">
+                          {track.subtitle}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
 
-      {/* Main Body */}
-      <div className="vt-body-scroll">
-        {/* Sticky Split Time Axis Column */}
+          {/* Main Body */}
+          <div className="vt-timeline-body">
+            {/* Sticky Split Time Axis Column */}
         <div
           className={`vt-time-axis-column ${isCompactRow ? 'is-compact-row' : ''} ${
             isSingleSlotPerDay ? 'is-single-slot' : ''
@@ -1007,7 +1075,18 @@ export function VerticalTimeline({
                         e.stopPropagation();
                         handleEventClickInternal(event);
                       }}
+                      onDoubleClick={(e) => e.stopPropagation()}
                       onContextMenu={(e) => {
+                        const nativePointerType =
+                          'pointerType' in e.nativeEvent
+                            ? (e.nativeEvent as PointerEvent).pointerType
+                            : lastPointerTypeRef.current;
+                        if (
+                          nativePointerType === 'touch' &&
+                          touchInteractionMode !== 'drag-edit'
+                        ) {
+                          return;
+                        }
                         if (onEventContextMenu) {
                           onEventContextMenu(event, e);
                         }
@@ -1069,6 +1148,8 @@ export function VerticalTimeline({
               </div>
             );
           })}
+        </div>
+          </div>
         </div>
       </div>
 
