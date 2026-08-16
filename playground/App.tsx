@@ -5,11 +5,14 @@ import {
   Track,
   Resolution,
   DragEventPayload,
-  CustomPropertyField,
-  CustomCurrencyValue,
   getSupportedTimezones,
   getSystemTimezone,
 } from "../src";
+
+interface CurrencyValue {
+  amount: number;
+  currencySymbol: string;
+}
 
 const SAMPLE_TRACKS: Track[] = [
   {
@@ -28,67 +31,6 @@ const SAMPLE_TRACKS: Track[] = [
     label: "Activities",
     subtitle: "Tours & Excursions (Child)",
     parentId: "track-accommodation",
-  },
-];
-
-const CUSTOM_FIELDS: CustomPropertyField[] = [
-  // Common for all tracks
-  {
-    key: "cost",
-    label: "Cost",
-    type: "currency",
-    defaultValue: { amount: 0, currencySymbol: "USD" },
-  },
-  {
-    key: "link",
-    label: "External Website Link",
-    type: "link",
-    defaultValue: "",
-  },
-  {
-    key: "hasBeenBooked",
-    label: "Has been booked",
-    type: "boolean",
-    defaultValue: false,
-  },
-  {
-    key: "hasBeenPaidFor",
-    label: "Has been paid for",
-    type: "boolean",
-    defaultValue: false,
-  },
-
-  // Accommodation and Activities tracks
-  {
-    key: "address",
-    label: "Address",
-    type: "string",
-    trackIds: ["track-accommodation", "track-activities"],
-    defaultValue: "",
-  },
-
-  // Transport track only
-  {
-    key: "startAddress",
-    label: "Start Address",
-    type: "string",
-    trackIds: ["track-transport"],
-    defaultValue: "",
-  },
-  {
-    key: "endAddress",
-    label: "End Address",
-    type: "string",
-    trackIds: ["track-transport"],
-    defaultValue: "",
-  },
-  {
-    key: "transportType",
-    label: "Transport Type",
-    type: "enum",
-    options: ["plane", "bus", "car", "taxi", "boat", "mixed"],
-    trackIds: ["track-transport"],
-    defaultValue: "bus",
   },
 ];
 
@@ -195,6 +137,7 @@ export function App() {
     undefined,
   );
   const [selectedTimezone, setSelectedTimezone] = useState<string>("America/New_York");
+  const [calendarTheme, setCalendarTheme] = useState<"light" | "dark">("dark");
   const supportedTimezones = getSupportedTimezones();
 
   // Playground History State for Undo / Redo
@@ -202,7 +145,7 @@ export function App() {
   const [historyIndex, setHistoryIndex] = useState<number>(0);
 
   const [logMessages, setLogMessages] = useState<string[]>([
-    "Playground initialized with track-scoped properties (addresses, transport types, booking status).",
+    "Playground initialized with host-controlled calendar theming.",
   ]);
 
   const currentEvents = history[historyIndex] || INITIAL_EVENTS;
@@ -295,22 +238,8 @@ export function App() {
     pushEventsState(nextEvents, log);
   };
 
-  const handleEventSave = (savedEvent: TimelineEvent) => {
-    const nextEvents = currentEvents.map((ev) =>
-      ev.id === savedEvent.id ? savedEvent : ev,
-    );
-    const costObj = savedEvent.data?.cost as CustomCurrencyValue | undefined;
-    const costStr = costObj
-      ? `${costObj.currencySymbol}${costObj.amount}`
-      : "N/A";
-    pushEventsState(
-      nextEvents,
-      `Saved "${savedEvent.title}": Cost=${costStr}, Booked=${savedEvent.data?.hasBeenBooked}, Paid=${savedEvent.data?.hasBeenPaidFor}`,
-    );
-  };
-
   const handleEventDelete = (eventId: string) => {
-    const nextEvents = currentEvents.filter((ev) => ev.id !== eventId);
+    const nextEvents = currentEvents.filter((event) => event.id !== eventId);
     pushEventsState(nextEvents, `Deleted event ID "${eventId}"`);
   };
 
@@ -390,8 +319,8 @@ export function App() {
               fontSize: "0.875rem",
             }}
           >
-            Track-Scoped Custom Properties: Cost, Links, Booking/Payment Status,
-            Addresses, and Transport Types.
+            Track layout, timezone-aware rendering, drag interactions, overlap
+            resolution, and host-owned event callbacks.
           </p>
         </div>
 
@@ -508,6 +437,37 @@ export function App() {
               marginBottom: 4,
             }}
           >
+            Native Color Scheme
+          </label>
+          <select
+            value={calendarTheme}
+            onChange={(e) =>
+              setCalendarTheme(e.target.value as "light" | "dark")
+            }
+            style={{
+              background: "#0f172a",
+              color: "#f8fafc",
+              border: "1px solid #475569",
+              padding: "6px 12px",
+              borderRadius: 6,
+              outline: "none",
+              cursor: "pointer",
+            }}
+          >
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+
+        <div>
+          <label
+            style={{
+              fontSize: "0.8rem",
+              color: "#94a3b8",
+              display: "block",
+              marginBottom: 4,
+            }}
+          >
             Day Height (H_day: {dayHeight}px)
           </label>
           <input
@@ -595,14 +555,14 @@ export function App() {
           <span
             style={{ fontSize: "0.8rem", color: "#818cf8", fontWeight: 500 }}
           >
-            Click any event to view/edit its track-specific address, transport
-            type, website link, or booking status!
+            Click and right-click callbacks let the host application decide how
+            to inspect or edit events.
           </span>
         </div>
       </div>
 
       {/* Main Timeline View */}
-      <div style={{ height: 600, marginBottom: 20 }}>
+      <div style={{ height: 600, marginBottom: 20, colorScheme: calendarTheme }}>
         <VerticalTimeline
           startDate={startDate}
           endDate={endDate}
@@ -613,11 +573,7 @@ export function App() {
           snapToMinutesOverride={snapOverride}
           timezone={selectedTimezone}
           defaultTimezone="UTC"
-          customPropertyFields={CUSTOM_FIELDS}
-          enableEventDialog={true}
           onEventsUpdate={handleEventsUpdate}
-          onEventSave={handleEventSave}
-          onEventDelete={handleEventDelete}
           onSlotDoubleClick={handleSlotDoubleClick}
           onEventClick={(evt) => addLog(`Clicked "${evt.title || evt.id}"`)}
           onEventContextMenu={(evt, e) => {
@@ -630,7 +586,7 @@ export function App() {
             addLog(`Right-clicked event "${evt.title || evt.id}" (Context Menu)`);
           }}
           renderEvent={(event) => {
-            const costObj = event.data?.cost as CustomCurrencyValue | undefined;
+            const costObj = event.data?.cost as CurrencyValue | undefined;
             const formatter = new Intl.NumberFormat("en-US", {
               style: "currency",
               currency: costObj?.currencySymbol,
@@ -679,7 +635,7 @@ export function App() {
                     </span>
                   </div>
 
-                  {event.data?.address && (
+                  {Boolean(event.data?.address) && (
                     <div
                       style={{
                         fontSize: "0.7rem",
@@ -690,11 +646,11 @@ export function App() {
                         textOverflow: "ellipsis",
                       }}
                     >
-                      📍 {String(event.data.address)}
+                      📍 {String(event.data?.address)}
                     </div>
                   )}
 
-                  {event.data?.startAddress && (
+                  {Boolean(event.data?.startAddress) && (
                     <div
                       style={{
                         fontSize: "0.7rem",
@@ -705,8 +661,8 @@ export function App() {
                         textOverflow: "ellipsis",
                       }}
                     >
-                      🛫 {String(event.data.startAddress)} ➔{" "}
-                      {String(event.data.endAddress || "")}
+                      🛫 {String(event.data?.startAddress)} ➔{" "}
+                      {String(event.data?.endAddress || "")}
                     </div>
                   )}
                 </div>

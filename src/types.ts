@@ -46,31 +46,6 @@ export interface DragEventPayload {
   nextTrackId: string;
 }
 
-export type CustomPropertyType =
-  | 'string'
-  | 'enum'
-  | 'number'
-  | 'currency'
-  | 'boolean'
-  | 'link';
-
-export interface CustomCurrencyValue {
-  amount: number;
-  currencySymbol: string;
-}
-
-export interface CustomPropertyField {
-  key: string;
-  label: string;
-  type: CustomPropertyType;
-  options?: string[]; // Options for 'enum' combobox
-  
-  /** Optional array of track IDs this field applies to. If omitted, applies to all tracks. */
-  trackIds?: string[];
-  
-  defaultValue?: string | number | boolean | CustomCurrencyValue;
-}
-
 export interface VerticalTimelineProps {
   // Core Time Scope
   startDate: Date;
@@ -104,12 +79,6 @@ export interface VerticalTimelineProps {
   /** Fallback timezone when timezone prop is omitted. Default: system local */
   defaultTimezone?: string;
 
-  /** Schema definitions for custom event properties */
-  customPropertyFields?: CustomPropertyField[];
-
-  /** Enable opening built-in event editor dialog on click. Default: true */
-  enableEventDialog?: boolean;
-
   // Render Prop Overrides
   renderEvent?: (
     event: TimelineEvent,
@@ -121,8 +90,6 @@ export interface VerticalTimelineProps {
   // Event Handlers
   onEventUpdate?: (payload: DragEventPayload) => void;
   onEventsUpdate?: (payloads: DragEventPayload[]) => void;
-  onEventSave?: (updatedEvent: TimelineEvent) => void;
-  onEventDelete?: (eventId: string) => void;
   onEventClick?: (event: TimelineEvent) => void;
   /** Called when an event is right-clicked (contextmenu event). */
   onEventContextMenu?: (

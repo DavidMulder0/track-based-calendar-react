@@ -31,7 +31,6 @@ import {
   resolveShortenEvents,
 } from '../utils/overlapResolution';
 import './VerticalTimeline.css';
-import { EventDialog } from './EventDialog';
 import { OverlapConflictDialog, OverlapStrategy } from './OverlapConflictDialog';
 
 type DragAction = 'move' | 'resize-top' | 'resize-bottom';
@@ -73,15 +72,11 @@ export function VerticalTimeline({
   snapToMinutesOverride,
   timezone,
   defaultTimezone,
-  customPropertyFields = [],
-  enableEventDialog = true,
   renderEvent,
   renderTrackHeader,
   renderTimeSlotLabel,
   onEventUpdate,
   onEventsUpdate,
-  onEventSave,
-  onEventDelete,
   onEventClick,
   onEventContextMenu,
   onEventCreate,
@@ -91,7 +86,6 @@ export function VerticalTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const wasDraggingRef = useRef<boolean>(false);
-  const createdEventIdRef = useRef<string | null>(null);
 
   const activeTimezone = useMemo(
     () => timezone || defaultTimezone || getSystemTimezone(),
@@ -109,10 +103,6 @@ export function VerticalTimeline({
   }
 
   const [createDragState, setCreateDragState] = useState<CreateDragState | null>(null);
-
-  // Dialog State
-  const [editingEvent, setEditingEvent] = useState<TimelineEvent | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // Overlap Conflict State
   const [pendingOverlap, setPendingOverlap] = useState<PendingOverlapMove | null>(null);
@@ -422,12 +412,7 @@ export function VerticalTimeline({
           },
         };
 
-        createdEventIdRef.current = newEvent.id;
         onEventCreateRef.current?.(newEvent);
-        if (enableEventDialog) {
-          setEditingEvent(newEvent);
-          setIsDialogOpen(true);
-        }
 
         setCreateDragState(null);
         return;
@@ -563,7 +548,6 @@ export function VerticalTimeline({
     P,
     activeSnapMs,
     defaultTimezone,
-    enableEventDialog,
     originMs,
   ]);
 
@@ -768,22 +752,13 @@ export function VerticalTimeline({
   };
 
   const handleEventClickInternal = (event: TimelineEvent) => {
-    // If the click was preceded by dragging or resizing, do NOT open the edit dialog
+    // If the click was preceded by dragging or resizing, do not emit a click.
     if (wasDraggingRef.current) {
       wasDraggingRef.current = false;
       return;
     }
 
     onEventClick?.(event);
-    if (enableEventDialog) {
-      setEditingEvent(event);
-      setIsDialogOpen(true);
-    }
-  };
-
-  const handleSaveEventInternal = (updatedEvent: TimelineEvent) => {
-    createdEventIdRef.current = null;
-    onEventSave?.(updatedEvent);
   };
 
   return (
@@ -819,7 +794,7 @@ export function VerticalTimeline({
                       <span
                         style={{
                           fontSize: '0.7rem',
-                          color: '#818cf8',
+                          color: 'var(--vt-color-accent)',
                           marginRight: 6,
                         }}
                       >
@@ -1096,26 +1071,6 @@ export function VerticalTimeline({
           })}
         </div>
       </div>
-
-      {/* Built-in Event Editing Modal Dialog */}
-      <EventDialog
-        event={editingEvent}
-        tracks={tracks}
-        customFields={customPropertyFields}
-        isOpen={isDialogOpen}
-        minDate={startDate}
-        maxDate={endDate}
-        onClose={() => {
-          if (createdEventIdRef.current) {
-            const idToDelete = createdEventIdRef.current;
-            createdEventIdRef.current = null;
-            onEventDelete?.(idToDelete);
-          }
-          setIsDialogOpen(false);
-        }}
-        onSave={handleSaveEventInternal}
-        onDelete={onEventDelete}
-      />
 
       {/* Overlap Conflict Modal Dialog */}
       <OverlapConflictDialog

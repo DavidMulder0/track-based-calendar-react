@@ -1,4 +1,106 @@
-@import './EventDialog.css';
+/* Shared modal chrome used by the timeline's overlap-resolution dialog. */
+dialog.vt-dialog {
+  background: var(--vt-color-surface);
+  border: 1px solid var(--vt-color-border);
+  border-radius: 12px;
+  width: calc(100% - 32px);
+  max-width: 560px;
+  max-height: 90vh;
+  padding: 0;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--vt-shadow-dialog);
+  overflow: hidden;
+  color: var(--vt-color-text);
+  animation: vtSlideUp 0.2s ease-out;
+}
+
+dialog.vt-dialog:not([open]) {
+  display: none;
+}
+
+dialog.vt-dialog::backdrop {
+  background-color: var(--vt-color-backdrop);
+  backdrop-filter: blur(8px);
+  animation: vtFadeIn 0.2s ease-out;
+}
+
+@keyframes vtFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vtSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.vt-dialog-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--vt-color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--vt-color-background);
+}
+
+.vt-dialog-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--vt-color-text);
+}
+
+.vt-dialog-close {
+  background: none;
+  border: none;
+  color: var(--vt-color-text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.vt-dialog-close:hover {
+  color: var(--vt-color-text);
+}
+
+.vt-dialog-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vt-dialog-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--vt-color-border);
+  display: flex;
+  align-items: center;
+  background: var(--vt-color-background);
+}
+
+.vt-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.vt-btn-secondary {
+  background: var(--vt-color-surface);
+  color: var(--vt-color-text-soft);
+}
+
+.vt-btn-secondary:hover {
+  background: var(--vt-color-hover);
+  color: var(--vt-color-text);
+}
 
 /* Overlap Conflict Dialog Styles */
 .vt-conflict-dialog {
@@ -16,12 +118,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(99, 102, 241, 0.2);
-  border: 1px solid rgba(129, 140, 248, 0.4);
+  background: var(--vt-color-accent-surface);
+  border: 1px solid var(--vt-color-accent-border);
   padding: 4px 10px;
   border-radius: 6px;
   font-size: 0.775rem;
-  color: #e0e7ff;
+  color: var(--vt-color-accent-text);
 }
 
 .vt-conflict-event-title {
@@ -31,7 +133,7 @@
 .vt-conflict-event-tz {
   font-size: 0.65rem;
   opacity: 0.8;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--vt-color-hover);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -47,19 +149,19 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--vt-color-background);
+  border: 1px solid var(--vt-color-border);
   border-radius: 8px;
   padding: 12px 14px;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-  color: #f8fafc;
+  color: var(--vt-color-text);
 }
 
 .vt-conflict-option-card:hover {
-  background: #1e293b;
-  border-color: #6366f1;
+  background: var(--vt-color-surface);
+  border-color: var(--vt-color-accent-strong);
   transform: translateY(-1px);
 }
 
@@ -73,12 +175,12 @@
 .vt-option-title {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #f8fafc;
+  color: var(--vt-color-text);
   margin-bottom: 2px;
 }
 
 .vt-option-desc {
   font-size: 0.775rem;
-  color: #94a3b8;
+  color: var(--vt-color-text-muted);
   line-height: 1.35;
 }

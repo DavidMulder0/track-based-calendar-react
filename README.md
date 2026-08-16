@@ -6,7 +6,7 @@ Features include:
 - **Weekend Day Row Highlighting**: Automatically identifies Saturday and Sunday rows (aware of active event timezones) and renders a subtle, lighter background row highlight across the entire grid and date column.
 - **Real-Time "Now" Indicator Line**: Displays a glowing yellow dotted horizontal line (`NOW` badge) across the tracks if and only if the current moment falls within the visible timeline range.
 - **Interactive Drag-to-Create**: Press and drag on empty track space to define an event's start time, duration, and track with a real-time visual ghost preview (`+ New Event`).
-- **Native HTML `<dialog>` Modals**: Built using native HTML `<dialog>` elements and Top Layer API, preventing modals from clipping or being hidden outside scrolling viewports.
+- **Native Overlap Resolution Modal**: Uses the HTML `<dialog>` Top Layer API so conflict choices are not clipped by the scrolling timeline.
 - **Responsive Compact & Single-Slot Layouts**: Automatic layout adjustments when row height is $\le 30\text{px}$ (inline weekday/date labels) or when `resolution={1}` (hides time sub-column).
 - **Dual-Column Time Axis Layout**: Vertically merged day blocks combined with configurable resolution time slots.
 - **Precision Temporal Scaling**: Independent scaling of day height ($H_{day}$) and grid resolution ($R$).
@@ -14,8 +14,8 @@ Features include:
 - **Chronological Sub-Column Overlap Layout**: Dynamic sweep-line layout for simultaneous overlapping events.
 - **Parent-Child Track Interactivity**: Synchronized real-time move and clamped bounds resizing of enclosed child events.
 - **Interactive Overlap Conflict Resolution**: Built-in modal presenting 3 strategies (*Do Nothing*, *Push Away with multi-track cascading*, *Shorten Overlapped Event(s)*).
-- **Track-Scoped Custom Property Schemas**: Full event editor dialog supporting `string`, `number`, `enum`, `currency` (with per-event currency symbols), `boolean`, and `link` field types scoped per track (`trackIds`).
-- **Modular CSS & Subpath Exports**: Support for standalone `EventDialog` imports (`track-based-calendar-react/EventDialog`) and automated CSS code-splitting.
+- **Host-Owned Event Editing**: Emits click and creation callbacks so applications can supply editing UI and domain-specific fields without coupling them to the calendar.
+- **Native Light/Dark Theming**: Uses inherited `color-scheme`, `light-dark()`, and public `--vt-*` custom properties without JavaScript theme state.
 - **Fully Controlled Architecture**: Zero internal state mutation, enabling seamless Undo / Redo history management in host applications.
 
 ---
@@ -29,11 +29,12 @@ Features include:
 - [Data Models & Types](#data-models--types)
 - [Advanced Guides](#advanced-guides)
   - [1. Parent-Child Track Dependencies](#1-parent-child-track-dependencies)
-  - [2. Track-Scoped Custom Property Fields](#2-track-scoped-custom-property-fields)
+  - [2. Host-Owned Event Editing](#2-host-owned-event-editing)
   - [3. Overlap Conflict Resolution Strategies](#3-overlap-conflict-resolution-strategies)
   - [4. Host-Level Undo / Redo Implementation](#4-host-level-undo--redo-implementation)
   - [5. Custom Event Rendering](#5-custom-event-rendering)
-  - [6. Standalone EventDialog Usage](#6-standalone-eventdialog-usage)
+  - [6. Theming](#6-theming)
+  - [7. Package Scope](#7-package-scope)
 
 ---
 
@@ -54,7 +55,6 @@ import {
   VerticalTimeline,
   TimelineEvent,
   Track,
-  CustomPropertyField,
   DragEventPayload,
 } from 'track-based-calendar-react';
 
@@ -69,27 +69,6 @@ const SAMPLE_TRACKS: Track[] = [
     label: 'Transport',
     subtitle: 'Flights & Shuttles (Child)',
     parentId: 'track-accommodation',
-  },
-];
-
-const CUSTOM_FIELDS: CustomPropertyField[] = [
-  {
-    key: 'cost',
-    label: 'Cost',
-    type: 'currency',
-    defaultValue: { amount: 0, currencySymbol: '$' },
-  },
-  {
-    key: 'hasBeenBooked',
-    label: 'Has been booked',
-    type: 'boolean',
-    defaultValue: false,
-  },
-  {
-    key: 'startAddress',
-    label: 'Start Address',
-    type: 'string',
-    trackIds: ['track-transport'],
   },
 ];
 
@@ -145,15 +124,13 @@ export function TimelineApp() {
         resolution={3} // 3 slots/day (8 hrs/slot)
         dayHeight={300} // 300px per 24-hour cycle
         defaultTimezone="America/New_York"
-        customPropertyFields={CUSTOM_FIELDS}
         onEventsUpdate={handleEventsUpdate}
         onEventCreate={(newEvent) => {
           setEvents((prev) => [...prev, newEvent]);
         }}
-        onEventSave={(savedEvent) => {
-          setEvents((prev) =>
-            prev.map((e) => (e.id === savedEvent.id ? savedEvent : e))
-          );
+        onEventClick={(event) => {
+          // Open your application's event editor here.
+          console.log('Selected event:', event);
         }}
       />
     </div>
@@ -209,16 +186,12 @@ If $S_{\text{prev}} \neq \emptyset$, the algorithm selects $E_{\text{closest}}$ 
 | `snapToMinutesOverride`| `number` | `undefined` | Optional drag snap override in minutes (e.g. `15`, `30`, `60`). |
 | `timezone` | `string` | System Local | Primary IANA timezone identifier for rendering date/time columns and newly created events. |
 | `defaultTimezone` | `string` | System Local | Fallback IANA timezone identifier when `timezone` prop is omitted. |
-| `customPropertyFields` | `CustomPropertyField[]` | `[]` | Schema definitions for custom properties in the built-in event dialog. |
-| `enableEventDialog` | `boolean` | `true` | Enables opening the built-in event detail modal when clicking an event. |
 | `renderEvent` | `Function` | `undefined` | Custom render prop for event card content. |
 | `renderTrackHeader` | `Function` | `undefined` | Custom render prop for track header labels. |
 | `renderTimeSlotLabel` | `Function` | `undefined` | Custom render prop for time slot labels. |
 | `onEventsUpdate` | `(payloads: DragEventPayload[]) => void` | `undefined` | Callback fired when drag/resize/push/shorten updates 1 or more events. |
 | `onEventUpdate` | `(payload: DragEventPayload) => void` | `undefined` | Single-event update callback fallback. |
 | `onEventCreate` | `(newEvent: TimelineEvent) => void` | `undefined` | Callback fired when a new event is created via drag-to-create on empty track space. |
-| `onEventSave` | `(updatedEvent: TimelineEvent) => void` | `undefined` | Callback fired when an event is saved via the built-in dialog. |
-| `onEventDelete` | `(eventId: string) => void` | `undefined` | Callback fired when an event is deleted via the built-in dialog. |
 | `onEventClick` | `(event: TimelineEvent) => void` | `undefined` | Callback fired when an event card is left-clicked. |
 | `onEventContextMenu` | `(event: TimelineEvent, e: MouseEvent) => void` | `undefined` | Callback fired when an event card is right-clicked (contextmenu event). |
 | `onSlotDoubleClick` | `(trackId, timestamp, tz) => void` | `undefined` | Callback fired when double-clicking a grid slot (returns inherited tz). |
@@ -259,31 +232,6 @@ interface Track {
 }
 ```
 
-### `CustomPropertyField`
-```ts
-type CustomPropertyType =
-  | 'string'
-  | 'enum'
-  | 'number'
-  | 'currency'
-  | 'boolean'
-  | 'link';
-
-interface CustomCurrencyValue {
-  amount: number;
-  currencySymbol: string; // Per-event currency symbol, e.g. "$", "€", "£", "¥"
-}
-
-interface CustomPropertyField {
-  key: string;
-  label: string;
-  type: CustomPropertyType;
-  options?: string[]; // Options array for 'enum' combobox
-  trackIds?: string[]; // Optional array of track IDs this field applies to
-  defaultValue?: string | number | boolean | CustomCurrencyValue;
-}
-```
-
 ---
 
 ## Advanced Guides
@@ -305,40 +253,25 @@ const tracks: Track[] = [
 
 ---
 
-### 2. Track-Scoped Custom Property Fields
-Use `trackIds` on `CustomPropertyField` definitions to scope fields to specific tracks:
+### 2. Host-Owned Event Editing
+The package deliberately does not include an event editor. Use `onEventClick` to select an existing event and `onEventCreate` to receive a drag-created event, then render the editor that belongs to your application:
 
 ```tsx
-const customFields: CustomPropertyField[] = [
-  // Available on ALL tracks
-  { key: 'cost', label: 'Cost', type: 'currency' },
-  { key: 'link', label: 'External Website', type: 'link' },
-  { key: 'hasBeenBooked', label: 'Has been booked', type: 'boolean' },
+const [editingEvent, setEditingEvent] = useState<TimelineEvent | null>(null);
 
-  // Available ONLY on Accommodation and Activities tracks
-  {
-    key: 'address',
-    label: 'Address',
-    type: 'string',
-    trackIds: ['track-accommodation', 'track-activities'],
-  },
-
-  // Available ONLY on Transport track
-  {
-    key: 'startAddress',
-    label: 'Start Address',
-    type: 'string',
-    trackIds: ['track-transport'],
-  },
-  {
-    key: 'transportType',
-    label: 'Transport Mode',
-    type: 'enum',
-    options: ['plane', 'bus', 'car', 'taxi', 'boat', 'mixed'],
-    trackIds: ['track-transport'],
-  },
-];
+<VerticalTimeline
+  events={events}
+  tracks={tracks}
+  onEventClick={setEditingEvent}
+  onEventCreate={(event) => {
+    setEvents((current) => [...current, event]);
+    setEditingEvent(event);
+  }}
+  {...timeScopeProps}
+/>
 ```
+
+Saving, deleting, validation, custom-property schemas, and cancel behavior are responsibilities of the host application. This keeps the calendar reusable across domains.
 
 ---
 
@@ -417,37 +350,54 @@ Pass `renderEvent` to completely customize the visual appearance of events:
 
 ---
 
-### 6. Standalone EventDialog Usage
-The `EventDialog` component can be imported and rendered standalone independently of the full timeline:
+### 6. Theming
+The component follows the host document's native `color-scheme`. Its default theme uses `light-dark()`, so no theme prop or JavaScript synchronization is required:
 
-```tsx
-import React, { useState } from 'react';
-import { EventDialog } from 'track-based-calendar-react/EventDialog';
-import { TimelineEvent, Track } from 'track-based-calendar-react';
+```css
+:root {
+  color-scheme: light dark;
+}
 
-export function StandaloneDialogExample({ activeEvent, tracks }: { activeEvent: TimelineEvent; tracks: Track[] }) {
-  const [isOpen, setIsOpen] = useState(true);
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
+```
 
-  return (
-    <EventDialog
-      isOpen={isOpen}
-      event={activeEvent}
-      tracks={tracks}
-      minDate={new Date('2026-06-01T00:00:00.000Z')}
-      maxDate={new Date('2026-06-03T00:00:00.000Z')}
-      onClose={() => setIsOpen(false)}
-      onSave={(updatedEvent) => {
-        console.log('Saved event:', updatedEvent);
-        setIsOpen(false);
-      }}
-      onDelete={(eventId) => {
-        console.log('Deleted event:', eventId);
-        setIsOpen(false);
-      }}
-    />
-  );
+Override semantic custom properties on `.vertical-timeline` or on a wrapper selected through the `className` prop. Overrides are inherited by the overlap-resolution dialog as well:
+
+```css
+.my-calendar {
+  --vt-font-family: var(--app-font-family);
+  --vt-color-background: var(--app-bg);
+  --vt-color-surface: var(--app-surface);
+  --vt-color-border: var(--app-border);
+  --vt-color-text: var(--app-text);
+  --vt-color-text-muted: var(--app-text-muted);
+  --vt-color-accent: var(--app-accent);
+  --vt-color-accent-hover: var(--app-accent-hover);
+  --vt-shadow-container: var(--app-shadow);
+  --vt-radius-container: var(--app-radius);
 }
 ```
+
+All public theme tokens:
+
+| Category | Custom properties |
+| :--- | :--- |
+| Typography | `--vt-font-family` |
+| Backgrounds | `--vt-color-background`, `--vt-color-surface`, `--vt-color-surface-subtle`, `--vt-color-surface-translucent` |
+| Text and borders | `--vt-color-border`, `--vt-color-text`, `--vt-color-text-muted`, `--vt-color-text-soft` |
+| Accent and events | `--vt-color-accent`, `--vt-color-accent-hover`, `--vt-color-accent-strong`, `--vt-color-accent-surface`, `--vt-color-accent-surface-strong`, `--vt-color-accent-border`, `--vt-color-accent-text` |
+| Grid states | `--vt-color-gridline`, `--vt-color-gridline-dashed`, `--vt-color-hover`, `--vt-color-weekend`, `--vt-color-weekend-surface`, `--vt-color-weekend-label` |
+| Indicators and dialogs | `--vt-color-now`, `--vt-color-on-now`, `--vt-color-warning`, `--vt-color-backdrop` |
+| Shadows | `--vt-shadow-container`, `--vt-shadow-event`, `--vt-shadow-event-hover`, `--vt-shadow-dialog`, `--vt-shadow-label`, `--vt-shadow-drag`, `--vt-shadow-now`, `--vt-shadow-now-badge` |
+| Shape | `--vt-radius-container`, `--vt-radius-event` |
+
+Consumers may use `light-dark()` inside any override. The component intentionally does not set `color-scheme`; the host remains the source of truth for system preference and explicit light/dark selection.
+
+---
+
+### 7. Package Scope
+`track-based-calendar-react` exports the `VerticalTimeline`, its calendar data types, and timezone helpers. It no longer exports `EventDialog`, dialog-specific custom-property types, or an `EventDialog` subpath. Applications upgrading from the previous API should move their editor into the host project and connect it through `onEventClick` and `onEventCreate`.
 
 ---
 

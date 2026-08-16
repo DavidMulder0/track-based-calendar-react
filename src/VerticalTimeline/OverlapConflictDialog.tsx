@@ -54,7 +54,7 @@ export function OverlapConflictDialog({
     >
       <div className="vt-dialog-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#f59e0b', fontSize: '1.2rem' }}>⚠️</span>
+          <span style={{ color: 'var(--vt-color-warning)', fontSize: '1.2rem' }}>⚠️</span>
           <h3>Event Overlap Detected</h3>
         </div>
         <button type="button" className="vt-dialog-close" onClick={onCancel}>
@@ -63,9 +63,9 @@ export function OverlapConflictDialog({
       </div>
 
       <div className="vt-dialog-body">
-        <p style={{ margin: 0, fontSize: '0.875rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-          Moving <strong style={{ color: '#f8fafc' }}>"{movedEvent.title || 'Untitled Event'}"</strong> causes an overlap with{' '}
-          <strong style={{ color: '#818cf8' }}>{overlappingEvents.length}</strong> event(s) on the track:
+        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--vt-color-text-soft)', lineHeight: 1.5 }}>
+          Moving <strong style={{ color: 'var(--vt-color-text)' }}>"{movedEvent.title || 'Untitled Event'}"</strong> causes an overlap with{' '}
+          <strong style={{ color: 'var(--vt-color-accent)' }}>{overlappingEvents.length}</strong> event(s) on the track:
         </p>
 
         {/* Overlapping Event List Badges */}
@@ -78,7 +78,7 @@ export function OverlapConflictDialog({
           ))}
         </div>
 
-        <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#94a3b8', marginTop: 8 }}>
+        <div style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--vt-color-text-muted)', marginTop: 8 }}>
           How would you like to handle the overlapping event(s)?
         </div>
 

@@ -42,16 +42,6 @@
         "default": "./dist/index.cjs"
       }
     },
-    "./EventDialog": {
-      "import": {
-        "types": "./dist/EventDialog.d.mts",
-        "default": "./dist/EventDialog.mjs"
-      },
-      "require": {
-        "types": "./dist/EventDialog.d.cts",
-        "default": "./dist/EventDialog.cjs"
-      }
-    },
     "./*.css": "./dist/*.css",
     "./package.json": "./package.json"
   }
