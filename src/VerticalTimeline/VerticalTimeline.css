@@ -14,7 +14,7 @@
   --vt-color-accent-surface: light-dark(rgba(99, 102, 241, 0.14), rgba(99, 102, 241, 0.25));
   --vt-color-accent-surface-strong: light-dark(rgba(99, 102, 241, 0.22), rgba(129, 140, 248, 0.35));
   --vt-color-accent-border: light-dark(rgba(79, 70, 229, 0.55), rgba(129, 140, 248, 0.6));
-  --vt-color-accent-text: light-dark(#312e81, #e0e7ff);
+  --vt-color-accent-text: light-dark(#050512, #e0e7ff);
   --vt-color-gridline: light-dark(rgba(15, 23, 42, 0.1), rgba(255, 255, 255, 0.07));
   --vt-color-gridline-dashed: light-dark(rgba(15, 23, 42, 0.12), rgba(255, 255, 255, 0.08));
   --vt-color-hover: light-dark(rgba(15, 23, 42, 0.04), rgba(255, 255, 255, 0.03));
