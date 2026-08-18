@@ -856,17 +856,6 @@ export function VerticalTimeline({
                   ) : (
                     <>
                       <div className="vt-track-title">
-                        {track.parentId && (
-                          <span
-                            style={{
-                              fontSize: '0.7rem',
-                              color: 'var(--vt-color-accent)',
-                              marginRight: 6,
-                            }}
-                          >
-                            ↳
-                          </span>
-                        )}
                         {track.label}
                       </div>
                       {track.subtitle && (
