@@ -321,7 +321,6 @@
   position: relative;
   border-right: 1px solid var(--vt-color-border);
   box-sizing: border-box;
-  background: radial-gradient(circle at top, var(--vt-color-hover) 0%, transparent 100%);
 }
 
 .vt-track-column:last-child {
